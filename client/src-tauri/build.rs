@@ -1,10 +1,13 @@
 use std::path::{Path, PathBuf};
 
 fn main() {
-    // Linux 开发构建把运行库放在可执行文件同级；deb/AppImage 则把资源放到
-    // usr/lib/SayIt。两处都写入相对 rpath，避免把本机构建目录烘进发布包。
+    // Linux 开发构建把运行库放在可执行文件同级；上游包放到 usr/lib/SayIt，
+    // Linux 移植版因 productName 使用 usr/lib/SayIt Linux。三处都写入相对
+    // rpath，既支持两套 Tauri 配置，也避免把本机构建目录烘进发布包。
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN:$ORIGIN/../lib/SayIt");
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN:$ORIGIN/../lib/SayIt:$ORIGIN/../lib/SayIt Linux"
+        );
     }
 
     // 必须在 tauri_build::build() 之前：tauri.conf.json 里把 transcribe-libs/*

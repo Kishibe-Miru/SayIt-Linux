@@ -877,6 +877,20 @@ fn overlay_window_snapshot(app: &AppHandle) -> Value {
 }
 
 fn set_overlay_interactivity(overlay: &tauri::WebviewWindow, interactive: bool) {
+    // Tao currently routes this operation through an X11-only path on Linux.
+    // GNOME Wayland advertises DISPLAY for XWayland as well, so DISPLAY alone is
+    // not a safe capability check. Leave the window accepting pointer events on
+    // native Wayland; the overlay remains usable and, most importantly, startup
+    // prewarm cannot bring down the whole application.
+    #[cfg(target_os = "linux")]
+    if std::env::var("XDG_SESSION_TYPE")
+        .is_ok_and(|value| value.eq_ignore_ascii_case("wayland"))
+        || std::env::var_os("WAYLAND_DISPLAY").is_some()
+    {
+        let _ = interactive;
+        return;
+    }
+
     let _ = overlay.set_ignore_cursor_events(!interactive);
 }
 

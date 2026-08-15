@@ -119,7 +119,7 @@ static INIT: std::sync::Once = std::sync::Once::new();
 pub fn init_backends() {
     INIT.call_once(|| {
         transcribe_cpp::init_logging();
-        match transcribe_cpp::init_backends_default() {
+        match init_packaged_backends() {
             Ok(()) => log::info!("transcribe backends registered"),
             Err(e) => log::error!("transcribe backends init failed: {}", e),
         }
@@ -135,6 +135,61 @@ pub fn init_backends() {
                 .join(", ")
         );
     });
+}
+
+/// AppImage's linuxdeploy copies the linked `libtranscribe` dependency into
+/// `usr/lib`, while Tauri resources (including the dlopen-only ggml modules)
+/// stay in `usr/lib/<product name>`. The native default follows libtranscribe
+/// and therefore scans the wrong directory. Locate the packaged module folder
+/// explicitly on Linux; direct Cargo builds still find modules beside the exe.
+#[cfg(target_os = "linux")]
+fn init_packaged_backends() -> transcribe_cpp::Result<()> {
+    if let Some(directory) = linux_backend_module_dir() {
+        log::info!(
+            "initializing transcribe backends from {}",
+            directory.display()
+        );
+        transcribe_cpp::init_backends(directory)
+    } else {
+        log::warn!("packaged transcribe module directory not found; using native default");
+        transcribe_cpp::init_backends_default()
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn init_packaged_backends() -> transcribe_cpp::Result<()> {
+    transcribe_cpp::init_backends_default()
+}
+
+#[cfg(target_os = "linux")]
+fn linux_backend_module_dir() -> Option<PathBuf> {
+    let executable = std::env::current_exe().ok()?;
+    let executable_dir = executable.parent()?;
+    [
+        executable_dir.to_path_buf(),
+        executable_dir.join("../lib/SayIt Linux"),
+        executable_dir.join("../lib/SayIt"),
+    ]
+    .into_iter()
+    .find(|directory| has_linux_backend_module(directory))
+    .and_then(|directory| directory.canonicalize().ok().or(Some(directory)))
+}
+
+#[cfg(target_os = "linux")]
+fn has_linux_backend_module(directory: &Path) -> bool {
+    std::fs::read_dir(directory).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| {
+                    name.ends_with(".so")
+                        && (name.starts_with("libggml-cpu-")
+                            || name.starts_with("libggml-vulkan")
+                            || name.starts_with("libggml-cuda"))
+                })
+        })
+    })
 }
 
 /// 该模型的权重是否已经下载好（目录里能找到 .gguf）。

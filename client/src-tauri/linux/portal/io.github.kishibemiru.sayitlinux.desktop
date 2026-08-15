@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=SayIt Linux Portal Identity
+Comment=Desktop identity used by SayIt Linux for XDG portals
+# This hidden entry supplies an app ID to XDG Portal. The visible Tauri entry
+# launches sayit-linux; using an always-present executable keeps this identity
+# resolvable when SayIt is run from source or as a standalone AppImage.
+Exec=/usr/bin/true
+Icon=sayit-linux
+Terminal=false
+NoDisplay=true
+Categories=Office;

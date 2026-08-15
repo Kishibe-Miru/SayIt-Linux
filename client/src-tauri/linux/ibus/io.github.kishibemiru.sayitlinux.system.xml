@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component>
+  <name>org.freedesktop.IBus.SayItLinux</name>
+  <description>SayIt Linux 语音输入提交引擎</description>
+  <exec>/usr/lib/sayit-linux/sayit-ibus-engine --ibus</exec>
+  <version>0.1.7</version>
+  <author>Kishibe-Miru</author>
+  <license>AGPL-3.0</license>
+  <homepage>https://github.com/Kishibe-Miru/SayIt-Linux</homepage>
+  <textdomain>sayit-linux</textdomain>
+  <engines>
+    <engine>
+      <name>sayit-linux</name>
+      <longname>SayIt Linux 语音输入</longname>
+      <description>把 SayIt 识别结果提交到当前输入框</description>
+      <language>zh</language>
+      <license>AGPL-3.0</license>
+      <author>Kishibe-Miru</author>
+      <icon>audio-input-microphone</icon>
+      <layout>us</layout>
+      <rank>99</rank>
+      <symbol>🎙</symbol>
+    </engine>
+  </engines>
+</component>

@@ -1,4 +1,10 @@
 {
+  "productName": "SayIt Linux",
+  "mainBinaryName": "sayit-linux",
+  "identifier": "io.github.kishibemiru.sayitlinux",
+  "build": {
+    "beforeBuildCommand": "npm run build:linux"
+  },
   "bundle": {
     "targets": [
       "deb",
@@ -9,6 +15,27 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.png"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "python3",
+          "python3-gi",
+          "gir1.2-ibus-1.0",
+          "ibus",
+          "libfcitx5core7 (>= 5.1.13)"
+        ],
+        "recommends": [
+          "fcitx5 (>= 5.1.13)"
+        ],
+        "files": {
+          "/usr/lib/sayit-linux/sayit-ibus-engine": "linux/ibus/sayit-ibus-engine",
+          "/usr/share/ibus/component/io.github.kishibemiru.sayitlinux.xml": "linux/ibus/io.github.kishibemiru.sayitlinux.system.xml",
+          "/usr/share/applications/io.github.kishibemiru.sayitlinux.desktop": "linux/portal/io.github.kishibemiru.sayitlinux.desktop",
+          "/usr/lib/x86_64-linux-gnu/fcitx5/libsayitcommit.so": "linux/fcitx5/build/libsayitcommit.so",
+          "/usr/share/fcitx5/addon/sayitcommit.conf": "linux/fcitx5/sayitcommit.conf"
+        }
+      }
+    }
   }
 }

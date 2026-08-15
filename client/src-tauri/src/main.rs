@@ -11,6 +11,8 @@ mod context;
 mod inject;
 mod providers;
 mod models;
+#[cfg(target_os = "linux")]
+mod linux;
 
 use storage::Storage;
 use window::WindowState;
@@ -522,8 +524,17 @@ fn main() {
                     .name("overlay-prewarm".to_string())
                     .spawn(move || {
                         thread::sleep(std::time::Duration::from_millis(1_500));
-                        let window_state = overlay_app.state::<WindowState>();
-                        window_state.prewarm_overlay(&overlay_app);
+                        // GTK/WebKitGTK and Tao window operations must run on the
+                        // desktop event-loop thread. Calling them directly from this
+                        // timer thread panics on GNOME Wayland when the overlay tries
+                        // to change cursor-event handling.
+                        let app_for_task = overlay_app.clone();
+                        if let Err(error) = overlay_app.run_on_main_thread(move || {
+                            let window_state = app_for_task.state::<WindowState>();
+                            window_state.prewarm_overlay(&app_for_task);
+                        }) {
+                            log::warn!("Failed to dispatch overlay prewarm: {error}");
+                        }
                     });
             }
 
