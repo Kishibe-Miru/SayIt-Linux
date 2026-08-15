@@ -38,7 +38,7 @@ export interface ModeStatus {
 
 type Listener = () => void
 
-let currentStatus: ModeStatus = { mode: 'server', detail: '', ready: null, blockedReason: '' }
+let currentStatus: ModeStatus = { mode: 'local', detail: '', ready: null, blockedReason: '' }
 const listeners = new Set<Listener>()
 
 function emitChange() {
@@ -72,9 +72,9 @@ function cloudProviderShort(provider: string): string {
 
 /** 重新从设置里读一遍模式/模型并广播。相关设置变更后调用。 */
 export async function refreshModeStatus(): Promise<void> {
-  const stored = await getSetting('workMode', 'server') as string
+  const stored = await getSetting('workMode', 'local') as string
   const mode: ModeStatusMode =
-    stored === 'local' || stored === 'cloud_api' ? stored : 'server'
+    stored === 'server' || stored === 'cloud_api' ? stored : 'local'
 
   let detail = ''
   let ready: boolean | null = null

@@ -19,6 +19,7 @@ import MicrophoneSection from './MicrophoneSection'
 import type { MicVolumeLevel } from './MicrophoneSection'
 import { ComboShortcutInput, PTTShortcutInput } from './ShortcutInputs'
 import { pttShortcutConflictsWithAccelerator } from '@/lib/shortcutKeys'
+import { DEFAULT_HANDS_FREE_SHORTCUT } from '@/lib/platform'
 import { t, type LanguagePreference, type TranslationKey } from '@/i18n'
 import { useT } from '@/i18n/useT'
 import { getLanguagePreference, switchLanguage } from '@/stores/language'
@@ -58,7 +59,7 @@ export default function GeneralSettingsPage() {
   const [protectClipboard, setProtectClipboard] = useState(true)
   // 兜底值统一从 defaults 取，不在这里写第二份字面量
   const [pttKey, setPttKey] = useState(() => getDefault<string>('shortcutPTT', ''))
-  const [handsFreeKey, setHandsFreeKey] = useState('AltRight')
+  const [handsFreeKey, setHandsFreeKey] = useState(DEFAULT_HANDS_FREE_SHORTCUT)
   const [historyEnabled, setHistoryEnabled] = useState(true)
   const [audioRetentionEnabled, setAudioRetentionEnabled] = useState(true)
   const [audioRetentionDays, setAudioRetentionDays] = useState(30)
@@ -111,7 +112,7 @@ export default function GeneralSettingsPage() {
     getLanguagePreference().then(setLanguagePreference).catch(() => { })
     getSetting('selectedMic', '').then(setSelectedMic)
     getSetting<string>('shortcutPTT').then((value) => setPttKey(value))
-    getSetting('shortcutHandsFree', 'AltRight').then((value) => setHandsFreeKey(value as string))
+    getSetting('shortcutHandsFree', DEFAULT_HANDS_FREE_SHORTCUT).then((value) => setHandsFreeKey(value as string))
     listMicrophones().then(setMics).catch(() => { })
     return () => { cancelled = true }
   }, [])

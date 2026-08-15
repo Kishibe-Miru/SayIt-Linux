@@ -259,7 +259,7 @@ const DEFAULT_PTT_VK: u32 = 0xA3;
 /// global-shortcut backend.
 pub fn default_ptt_setting() -> &'static str {
     if cfg!(target_os = "linux") {
-        "ControlLeft+AltLeft+Space"
+        "AltLeft+Space"
     } else {
         DEFAULT_PTT_SETTING
     }
@@ -267,7 +267,7 @@ pub fn default_ptt_setting() -> &'static str {
 
 pub fn default_hands_free_setting() -> &'static str {
     if cfg!(target_os = "linux") {
-        "Control+Alt+L"
+        "Alt+L"
     } else {
         "AltRight"
     }

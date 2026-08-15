@@ -6,6 +6,7 @@ import { SHORTCUTS_CHANGED_EVENT } from '@/services/bridge'
 import FeedbackSection from '@/components/FeedbackSection'
 import NoticeBanner from '@/components/NoticeBanner'
 import { displayShortcut } from '@/lib/shortcutKeys'
+import { DEFAULT_HANDS_FREE_SHORTCUT } from '@/lib/platform'
 import { getLocale } from '@/i18n'
 import { useT } from '@/i18n/useT'
 
@@ -34,12 +35,12 @@ function WithKeyChip({ template, keyLabel, chipClassName }: {
 export default function Home() {
   const t = useT()
   const [stats, setStats] = useState<Stats>({ totalDurationSec: 0, totalChars: 0 })
-  const [handsFreeKey, setHandsFreeKey] = useState('AltRight')
+  const [handsFreeKey, setHandsFreeKey] = useState(DEFAULT_HANDS_FREE_SHORTCUT)
 
   useEffect(() => {
     getStats().then(setStats)
     const loadHandsFreeKey = () =>
-      getSetting('shortcutHandsFree', 'AltRight').then((value) => setHandsFreeKey(value as string))
+      getSetting('shortcutHandsFree', DEFAULT_HANDS_FREE_SHORTCUT).then((value) => setHandsFreeKey(value as string))
     void loadHandsFreeKey()
     // 快捷键变化时（向导 / 设置页修改）实时刷新首页提示，无需切换路由
     window.addEventListener(SHORTCUTS_CHANGED_EVENT, loadHandsFreeKey)

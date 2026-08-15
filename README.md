@@ -10,6 +10,7 @@ Open-source voice typing for Windows. Press a shortcut and speak—SayIt transcr
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/crosswk/SayIt/releases/latest)
+[![Linux Port](https://img.shields.io/badge/Linux-source%20build-FCC624?logo=linux&logoColor=black)](docs/Linux.md)
 [![Latest release](https://img.shields.io/github/v/release/crosswk/SayIt?label=release)](https://github.com/crosswk/SayIt/releases/latest)
 
 **[Download for Windows](https://github.com/crosswk/SayIt/releases/latest)** · **[Try the web demo](https://sayitapp.site)** · **[简体中文](README.zh-CN.md)**
@@ -123,6 +124,8 @@ Qwen3-ASR-1.7B with vLLM on an AWS EC2 `g5.xlarge` (NVIDIA A10G 24 GB):
 | 5 minutes | ~3.0 s | 0.010 |
 
 ## Development
+
+The Linux port supports GNOME's native Wayland global-shortcut portal and direct text commits through Fcitx5 (including Rime) or IBus. See the [Linux guide](docs/Linux.md) for platform dependencies, installation, and packaging.
 
 ### Desktop client
 

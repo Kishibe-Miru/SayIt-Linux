@@ -239,9 +239,10 @@ fn linux_paste_candidates(session_type: Option<&str>) -> Vec<LinuxPasteTool> {
     }
 }
 
-/// Linux text insertion uses the desktop clipboard plus a compositor-appropriate
-/// synthetic Ctrl+V. X11 is covered by xdotool; Wayland compositors can use wtype,
-/// with ydotool as the compositor-independent uinput fallback.
+/// Linux text insertion first asks the active Fcitx5 or IBus integration to commit
+/// the text. This is the reliable native-Wayland path. If neither integration owns
+/// the focused input context, retain the desktop clipboard + synthetic Ctrl+V
+/// backends as a compatibility fallback.
 #[cfg(target_os = "linux")]
 pub fn inject_text_linux(
     app: &tauri::AppHandle,
@@ -249,6 +250,29 @@ pub fn inject_text_linux(
     restore_clipboard: bool,
 ) -> InjectResult {
     use tauri_plugin_clipboard_manager::ClipboardExt;
+
+    match crate::linux::try_commit_text(text) {
+        Ok(backend) => {
+            crate::commands::system::write_log_line(&format!(
+                "[RUST] [inject] Linux input-method commit succeeded strategy={}",
+                backend.strategy
+            ));
+            return InjectResult {
+                ok: true,
+                strategy: Some(backend.strategy.to_string()),
+                reason: None,
+                detail: Some(backend.description.to_string()),
+                uncertain: false,
+            };
+        }
+        Err(reason) => {
+            // Socket paths and error strings contain no dictated text, so this is
+            // safe to log while still explaining why the compatibility path ran.
+            crate::commands::system::write_log_line(&format!(
+                "[RUST] [inject] input-method commit unavailable; using clipboard fallback reason={reason}"
+            ));
+        }
+    }
 
     let clipboard = app.clipboard();
     let previous_text = if restore_clipboard {

@@ -314,7 +314,7 @@ export default function AIProviderSection() {
       setActiveId(state.activeId)
       setLoaded(true)
     })()
-    void getSetting('workMode', 'server').then((value) => {
+    void getSetting('workMode', 'local').then((value) => {
       const mode = value as string
       if (mode === 'server' || mode === 'cloud_api' || mode === 'local') setWorkMode(mode as typeof workMode)
     })

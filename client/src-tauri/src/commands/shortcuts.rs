@@ -48,8 +48,19 @@ pub fn register_all_global_shortcuts(app: &AppHandle, storage: &Storage) {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
 
-    // Linux 没有 Windows 的 WH_KEYBOARD_LL 单键钩子。将 PTT 物理组合键
-    // 折叠成 Tauri accelerator，并直接使用 Pressed/Released 事件驱动录音。
+    let hf_val = storage.get("shortcutHandsFree", None);
+    let hf_key = hf_val
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| crate::keyboard::default_hands_free_setting().to_owned());
+
+    #[cfg(target_os = "linux")]
+    let native_wayland = crate::linux::is_native_wayland_session();
+    #[cfg(not(target_os = "linux"))]
+    let native_wayland = false;
+
+    // Linux 没有 Windows 的 WH_KEYBOARD_LL 单键钩子。原生 Wayland 优先走
+    // GlobalShortcuts Portal；X11 使用 Tauri 的 X11 快捷键实现。
     #[cfg(target_os = "linux")]
     {
         let ptt_setting = storage
@@ -57,73 +68,16 @@ pub fn register_all_global_shortcuts(app: &AppHandle, storage: &Storage) {
             .as_str()
             .map(str::to_owned)
             .unwrap_or_else(|| crate::keyboard::default_ptt_setting().to_owned());
-        if let Some(accelerator) = linux_ptt_accelerator(&ptt_setting) {
-            let setting_for_event = ptt_setting.clone();
-            let accelerator_for_log = accelerator.clone();
-            if let Err(error) = gs.on_shortcut(
-                accelerator.as_str(),
-                move |app, _shortcut, event| {
-                    let (reason, phase) = if event.state == ShortcutState::Pressed {
-                        ("keydown", "ptt-down")
-                    } else {
-                        ("keyup", "ptt-up")
-                    };
-                    let _ = app.emit(
-                        phase,
-                        serde_json::json!({
-                            "source": "linux_global_shortcut",
-                            "reason": reason,
-                            "keycode": 0,
-                            "pttSetting": setting_for_event.clone(),
-                            "timestamp": chrono::Utc::now().timestamp_millis(),
-                            "altKey": setting_for_event.contains("Alt"),
-                            "ctrlKey": setting_for_event.contains("Control"),
-                            "shiftKey": setting_for_event.contains("Shift"),
-                            "metaKey": setting_for_event.contains("Meta"),
-                        }),
-                    );
-                },
-            ) {
-                log::error!(
-                    "Failed to register Linux PTT shortcut '{}' (setting '{}'): {}",
-                    accelerator_for_log,
-                    ptt_setting,
-                    error
-                );
-            } else {
-                log::info!(
-                    "Registered Linux PTT shortcut: {} (setting={})",
-                    accelerator_for_log,
-                    ptt_setting
-                );
-            }
+        if native_wayland {
+            crate::linux::configure_shortcuts(app, ptt_setting, hf_key.clone());
         } else {
-            log::error!(
-                "Linux PTT shortcut '{}' is not representable as a global accelerator; use modifier(s) + one main key",
-                ptt_setting
-            );
+            register_linux_tauri_ptt(app, &ptt_setting);
         }
     }
 
     // 免提组合键
-    let hf_val = storage.get("shortcutHandsFree", None);
-    let hf_key = hf_val
-        .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| crate::keyboard::default_hands_free_setting().to_owned());
-    if !hf_key.is_empty() && hf_key.contains('+') {
-        if let Err(e) = gs.on_shortcut(hf_key.as_str(), move |app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                let _ = app.emit(
-                    "toggle-hands-free",
-                    serde_json::json!({ "source": "globalShortcut" }),
-                );
-            }
-        }) {
-            log::warn!("Failed to register hands-free shortcut '{}': {}", hf_key, e);
-        } else {
-            log::info!("Registered hands-free shortcut: {}", hf_key);
-        }
+    if !native_wayland {
+        register_tauri_hands_free(app, &hf_key, "globalShortcut");
     }
 
     // 润色模式切换快捷键：presetShortcuts = { presetId: 组合键 }
@@ -152,6 +106,83 @@ pub fn register_all_global_shortcuts(app: &AppHandle, storage: &Storage) {
             }
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+fn register_linux_tauri_ptt(app: &AppHandle, ptt_setting: &str) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    let Some(accelerator) = linux_ptt_accelerator(ptt_setting) else {
+        log::error!(
+            "Linux PTT shortcut '{}' is not representable as a global accelerator; use modifier(s) + one main key",
+            ptt_setting
+        );
+        return;
+    };
+    let setting_for_event = ptt_setting.to_string();
+    let accelerator_for_log = accelerator.clone();
+    if let Err(error) = app.global_shortcut().on_shortcut(
+        accelerator.as_str(),
+        move |app, _shortcut, event| {
+            crate::linux::shortcuts::emit_ptt(
+                app,
+                &setting_for_event,
+                event.state == ShortcutState::Pressed,
+                "linux_global_shortcut",
+            );
+        },
+    ) {
+        log::error!(
+            "Failed to register Linux PTT shortcut '{}' (setting '{}'): {}",
+            accelerator_for_log,
+            ptt_setting,
+            error
+        );
+    } else {
+        log::info!(
+            "Registered Linux PTT shortcut: {} (setting={})",
+            accelerator_for_log,
+            ptt_setting
+        );
+    }
+}
+
+fn register_tauri_hands_free(app: &AppHandle, hf_key: &str, source: &'static str) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    if hf_key.is_empty() || !hf_key.contains('+') {
+        return;
+    }
+    let hf_key_for_log = hf_key.to_string();
+    if let Err(error) = app.global_shortcut().on_shortcut(
+        hf_key,
+        move |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                let _ = app.emit(
+                    "toggle-hands-free",
+                    serde_json::json!({ "source": source }),
+                );
+            }
+        },
+    ) {
+        log::warn!(
+            "Failed to register hands-free shortcut '{}': {}",
+            hf_key_for_log,
+            error
+        );
+    } else {
+        log::info!("Registered hands-free shortcut: {}", hf_key_for_log);
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn register_linux_tauri_fallback(
+    app: &AppHandle,
+    ptt_setting: &str,
+    hands_free_setting: &str,
+) {
+    register_linux_tauri_ptt(app, ptt_setting);
+    register_tauri_hands_free(app, hands_free_setting, "linuxGlobalShortcutFallback");
 }
 
 /// Convert the DOM physical-code format used by PTT settings into a Tauri accelerator.
@@ -228,8 +259,8 @@ mod linux_shortcut_tests {
     #[test]
     fn converts_linux_default_ptt_chord() {
         assert_eq!(
-            linux_ptt_accelerator("ControlLeft+AltLeft+Space").as_deref(),
-            Some("Control+Alt+Space")
+            linux_ptt_accelerator("AltLeft+Space").as_deref(),
+            Some("Alt+Space")
         );
         assert_eq!(
             linux_ptt_accelerator("MetaLeft+KeyV").as_deref(),

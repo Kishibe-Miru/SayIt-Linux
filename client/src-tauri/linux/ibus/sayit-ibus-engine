@@ -1,0 +1,290 @@
+#!/usr/bin/python3
+"""Minimal IBus commit engine for SayIt Linux.
+
+IBus starts this process after the user selects the SayIt Linux input source.
+The Tauri application sends UTF-8 text over a private Unix socket; the engine
+commits it to the focused IBus input context on GLib's main thread.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import socket
+import stat
+import struct
+import sys
+import threading
+from typing import Optional
+
+import gi
+
+gi.require_version("IBus", "1.0")
+from gi.repository import GLib, IBus  # noqa: E402
+
+
+COMPONENT_NAME = "org.freedesktop.IBus.SayItLinux"
+ENGINE_NAME = "sayit-linux"
+SOCKET_DIRECTORY = "sayit-linux"
+SOCKET_NAME = "ibus.sock"
+MAX_TEXT_BYTES = 1024 * 1024
+
+
+class EngineRegistry:
+    """Tracks the one engine instance that currently owns keyboard focus."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._active: Optional[SayItEngine] = None
+
+    def activate(self, engine: "SayItEngine") -> None:
+        with self._lock:
+            self._active = engine
+
+    def deactivate(self, engine: "SayItEngine") -> None:
+        with self._lock:
+            if self._active is engine:
+                self._active = None
+
+    def active(self) -> Optional["SayItEngine"]:
+        with self._lock:
+            return self._active
+
+
+REGISTRY = EngineRegistry()
+
+
+class SayItEngine(IBus.Engine):
+    def __init__(self, bus: IBus.Bus, object_path: str) -> None:
+        super().__init__(connection=bus.get_connection(), object_path=object_path)
+        self._enabled = False
+        self._focused = False
+
+    def _publish_focus(self) -> None:
+        if self._enabled and self._focused:
+            REGISTRY.activate(self)
+        else:
+            REGISTRY.deactivate(self)
+
+    def do_enable(self) -> None:
+        self._enabled = True
+        self._publish_focus()
+
+    def do_disable(self) -> None:
+        self._enabled = False
+        self._publish_focus()
+
+    def do_focus_in(self) -> None:
+        self._focused = True
+        self._publish_focus()
+
+    def do_focus_out(self) -> None:
+        self._focused = False
+        self._publish_focus()
+
+    def do_focus_in_id(self, _object_path: str, _client: str) -> None:
+        self.do_focus_in()
+
+    def do_focus_out_id(self, _object_path: str) -> None:
+        self.do_focus_out()
+
+    def commit_external_text(self, text: str) -> bool:
+        if not self._enabled or not self._focused:
+            return False
+        self.commit_text(IBus.Text.new_from_string(text))
+        return True
+
+
+class SayItFactory(IBus.Factory):
+    def __init__(self, bus: IBus.Bus) -> None:
+        # The PyGObject override fills both the bus connection and IBus' fixed
+        # /org/freedesktop/IBus/Factory object path when the Bus is supplied.
+        super().__init__(bus)
+        self._bus = bus
+        self._serial = 0
+
+    def do_create_engine(self, engine_name: str) -> Optional[SayItEngine]:
+        if engine_name != ENGINE_NAME:
+            return None
+        self._serial += 1
+        object_path = f"/org/freedesktop/IBus/SayItLinux/Engine/{self._serial}"
+        return SayItEngine(self._bus, object_path)
+
+
+class CommitSocket:
+    def __init__(self) -> None:
+        self._stop = threading.Event()
+        self._listener: Optional[socket.socket] = None
+        self.path = self._socket_path()
+        self._thread = threading.Thread(
+            target=self._serve,
+            name="sayit-ibus-socket",
+            daemon=True,
+        )
+
+    @staticmethod
+    def _socket_path() -> Path:
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+        if not runtime_dir:
+            raise RuntimeError("XDG_RUNTIME_DIR is unavailable")
+        parent = Path(runtime_dir) / SOCKET_DIRECTORY
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        metadata = parent.stat()
+        if metadata.st_uid != os.getuid():
+            raise RuntimeError(f"socket directory is not owned by this user: {parent}")
+        if stat.S_IMODE(metadata.st_mode) != 0o700:
+            parent.chmod(0o700)
+        return parent / SOCKET_NAME
+
+    def start(self) -> None:
+        self._remove_stale_socket()
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(str(self.path))
+        os.chmod(self.path, 0o600)
+        listener.listen(8)
+        listener.settimeout(1.0)
+        self._listener = listener
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._listener is not None:
+            self._listener.close()
+        try:
+            self.path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def _remove_stale_socket(self) -> None:
+        if not self.path.exists():
+            return
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        probe.settimeout(0.2)
+        try:
+            probe.connect(str(self.path))
+        except OSError:
+            self.path.unlink(missing_ok=True)
+        else:
+            raise RuntimeError(f"another SayIt IBus engine is already running: {self.path}")
+        finally:
+            probe.close()
+
+    def _serve(self) -> None:
+        assert self._listener is not None
+        while not self._stop.is_set():
+            try:
+                connection, _ = self._listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                if self._stop.is_set():
+                    return
+                continue
+            with connection:
+                connection.settimeout(2.5)
+                self._handle_connection(connection)
+
+    def _handle_connection(self, connection: socket.socket) -> None:
+        header = self._receive_exact(connection, 4)
+        if header is None:
+            connection.sendall(b"INVALID\n")
+            return
+        length = struct.unpack("!I", header)[0]
+        if length == 0 or length > MAX_TEXT_BYTES:
+            connection.sendall(b"INVALID\n")
+            return
+        payload = self._receive_exact(connection, length)
+        if payload is None:
+            connection.sendall(b"INVALID\n")
+            return
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            connection.sendall(b"INVALID\n")
+            return
+
+        completed = threading.Event()
+        outcome = {"response": b"ERROR\n"}
+        GLib.idle_add(self._commit_on_main_thread, text, outcome, completed)
+        if not completed.wait(timeout=2.0):
+            connection.sendall(b"TIMEOUT\n")
+            return
+        connection.sendall(outcome["response"])
+
+    @staticmethod
+    def _commit_on_main_thread(
+        text: str,
+        outcome: dict[str, bytes],
+        completed: threading.Event,
+    ) -> bool:
+        try:
+            engine = REGISTRY.active()
+            if engine is None or not engine.commit_external_text(text):
+                outcome["response"] = b"NO_FOCUS\n"
+            else:
+                outcome["response"] = b"OK\n"
+        except Exception as error:  # IBus errors must not terminate its service.
+            print(f"SayIt IBus commit failed: {error}", file=sys.stderr)
+            outcome["response"] = b"ERROR\n"
+        finally:
+            completed.set()
+        return GLib.SOURCE_REMOVE
+
+    @staticmethod
+    def _receive_exact(connection: socket.socket, size: int) -> Optional[bytes]:
+        chunks = bytearray()
+        while len(chunks) < size:
+            try:
+                chunk = connection.recv(size - len(chunks))
+            except (OSError, socket.timeout):
+                return None
+            if not chunk:
+                return None
+            chunks.extend(chunk)
+        return bytes(chunks)
+
+
+def run_engine() -> int:
+    IBus.init()
+    bus = IBus.Bus()
+    if not bus.is_connected():
+        print("SayIt IBus engine could not connect to ibus-daemon", file=sys.stderr)
+        return 1
+
+    main_loop = GLib.MainLoop()
+    bus.connect("disconnected", lambda _bus: main_loop.quit())
+    factory = SayItFactory(bus)
+    bus.request_name(COMPONENT_NAME, 0)
+
+    commit_socket = CommitSocket()
+    try:
+        commit_socket.start()
+        try:
+            main_loop.run()
+        except KeyboardInterrupt:
+            pass
+    finally:
+        commit_socket.close()
+        # Keep the factory alive until after the main loop and socket are closed.
+        del factory
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SayIt Linux IBus commit engine")
+    parser.add_argument("--ibus", action="store_true", help="started by ibus-daemon")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="validate Python/GObject dependencies without starting an engine",
+    )
+    args = parser.parse_args()
+    if args.check:
+        print(f"SayIt IBus engine ready (IBus {IBus.MAJOR_VERSION}.{IBus.MINOR_VERSION})")
+        return 0
+    return run_engine()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

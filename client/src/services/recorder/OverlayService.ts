@@ -15,7 +15,7 @@ function normalizeTheme(value: unknown): OverlayWaveTheme {
   if (value === 'black-white' || value === 'black-blue' || value === 'black-rainbow') {
     return value
   }
-  return 'black-blue'
+  return 'black-white'
 }
 
 function normalizeWidthPreset(value: unknown): OverlayWidthPreset {
@@ -24,7 +24,7 @@ function normalizeWidthPreset(value: unknown): OverlayWidthPreset {
 }
 
 export class OverlayService {
-  private theme: OverlayWaveTheme = 'black-rainbow'
+  private theme: OverlayWaveTheme = 'black-white'
   private showDuration = true
   private readySoundEnabled = true
   private widthPreset: OverlayWidthPreset = 'medium'
@@ -42,7 +42,7 @@ export class OverlayService {
   constructor(private readonly getElapsedSec: () => number) { }
 
   async refreshSettings() {
-    this.theme = normalizeTheme(await getSetting('overlayWaveTheme', 'black-rainbow'))
+    this.theme = normalizeTheme(await getSetting('overlayWaveTheme', 'black-white'))
     this.showDuration = Boolean(await getSetting('overlayShowDuration', true))
     this.readySoundEnabled = Boolean(await getSetting('readySoundEnabled', true))
     this.widthPreset = normalizeWidthPreset(await getSetting('overlayWidth', 'medium'))

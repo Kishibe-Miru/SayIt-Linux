@@ -212,7 +212,7 @@ SayIt/
 
 ## 开发
 
-Linux 源码版的依赖、X11/Wayland 差异与打包方式见 [Linux 说明](docs/Linux.md)。
+Linux 移植版已经支持 GNOME 原生 Wayland 全局快捷键，并可通过 Fcitx5（含 Rime）或 IBus 把语音结果直接提交到当前输入框。依赖、安装、X11/Wayland 差异与打包方式见 [Linux 说明](docs/Linux.md)。
 
 ### 客户端
 

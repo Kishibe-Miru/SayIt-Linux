@@ -11,7 +11,7 @@ import type { TranscriptionProvider, WorkMode } from './types'
 export type { TranscriptionProvider, TranscriptionCallbacks, StartOptions, StopOptions, FinalResult, ASRResult, WorkMode, ProviderState } from './types'
 
 let currentProvider: TranscriptionProvider | null = null
-let currentMode: WorkMode = 'server'
+let currentMode: WorkMode = 'local'
 
 function createProvider(mode: WorkMode): TranscriptionProvider {
   switch (mode) {
@@ -22,8 +22,8 @@ function createProvider(mode: WorkMode): TranscriptionProvider {
     case 'local':
       return new LocalProvider()
     default:
-      addRuntimeEvent('warn', 'transcription', `Unknown processing mode "${mode}"; falling back to server mode`)
-      return new ServerProvider()
+      addRuntimeEvent('warn', 'transcription', `Unknown processing mode "${mode}"; falling back to local mode`)
+      return new LocalProvider()
   }
 }
 
@@ -78,8 +78,8 @@ export async function switchProvider(mode: WorkMode): Promise<TranscriptionProvi
 
 /** 从 store 读取保存的 workMode 并初始化 */
 export async function initProviderFromStore(): Promise<void> {
-  const stored = await getSetting('workMode', 'server')
-  const mode = (stored === 'server' || stored === 'cloud_api' || stored === 'local') ? stored : 'server'
+  const stored = await getSetting('workMode', 'local')
+  const mode = (stored === 'server' || stored === 'cloud_api' || stored === 'local') ? stored : 'local'
   currentMode = mode as WorkMode
   currentProvider = createProvider(currentMode)
   addRuntimeEvent('info', 'transcription', 'Provider initialized', { mode: currentMode })

@@ -172,7 +172,7 @@ function OverlayPreview({ theme, showDuration, barCount, streaming }: { theme: O
 export default function AppearancePage() {
   const t = useT()
   const [activeTheme, setActiveTheme] = useState(getActiveThemeId)
-  const [overlayWaveTheme, setOverlayWaveTheme] = useState<OverlayWaveTheme>('black-rainbow')
+  const [overlayWaveTheme, setOverlayWaveTheme] = useState<OverlayWaveTheme>('black-white')
   const [overlayShowDuration, setOverlayShowDuration] = useState(true)
   const [overlayWidth, setOverlayWidth] = useState<OverlayWidthPreset>('medium')
   const [streamingDisplay, setStreamingDisplay] = useState(false)
@@ -205,7 +205,7 @@ export default function AppearancePage() {
       const [showDuration, streaming, waveTheme, width] = await Promise.all([
         getSetting('overlayShowDuration', true).catch(() => true),
         getSetting('streamingDisplayEnabled', false).catch(() => false),
-        getSetting('overlayWaveTheme', 'black-rainbow').catch(() => 'black-rainbow'),
+        getSetting('overlayWaveTheme', 'black-white').catch(() => 'black-white'),
         getSetting('overlayWidth', 'medium').catch(() => 'medium'),
       ])
       if (cancelled) return
