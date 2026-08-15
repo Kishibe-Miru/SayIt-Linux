@@ -41,7 +41,7 @@ function normalizeTheme(theme: unknown): OverlayWaveTheme {
   if (theme === 'black-white' || theme === 'black-blue' || theme === 'black-rainbow') {
     return theme
   }
-  return 'black-blue'
+  return 'black-white'
 }
 
 function getListeningBarColor(index: number, total: number, theme: OverlayWaveTheme): string {
@@ -80,7 +80,7 @@ export default function Overlay() {
   const [state, setState] = useState<OverlayState>('waiting')
   const [bars, setBars] = useState<number[]>(IDLE_BARS)
   const [elapsedSec, setElapsedSec] = useState(0)
-  const [theme, setTheme] = useState<OverlayWaveTheme>('black-blue')
+  const [theme, setTheme] = useState<OverlayWaveTheme>('black-white')
   const [showDuration, setShowDuration] = useState(true)
   const [barCount, setBarCount] = useState(DEFAULT_BAR_COUNT)
   const [fallbackText, setFallbackText] = useState('')

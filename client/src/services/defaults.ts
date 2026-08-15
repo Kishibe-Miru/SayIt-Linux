@@ -20,7 +20,7 @@ export const DEFAULTS: Record<string, unknown> = {
   'ui.language': 'auto', // 可选: 'auto'（跟随系统）| 'zh-CN' | 'en'
 
   // ── 工作模式 ──
-  workMode: 'server', // 可选: 'server' | 'cloud_api' | 'local'
+  workMode: 'local', // 可选: 'server' | 'cloud_api' | 'local'
 
   // ── 快捷键 ──
   // 按住说话。旧单键保持 DOM code；组合键使用物理 code 格式，如 'ControlLeft+MetaLeft' 或 'ControlLeft+KeyK'。
@@ -106,7 +106,7 @@ export const DEFAULTS: Record<string, unknown> = {
   'server.language': 'auto',
 
   // ── 悬浮窗 ──
-  overlayWaveTheme: 'black-rainbow', // 可选: 'black-rainbow' | 'black-blue' | 'black-white'
+  overlayWaveTheme: 'black-white', // 可选: 'black-rainbow' | 'black-blue' | 'black-white'
   overlayShowDuration: true, // 是否显示录音时长。可选: true | false
   overlayWidth: 'short', // 可选: 'short' | 'medium' | 'long'
 

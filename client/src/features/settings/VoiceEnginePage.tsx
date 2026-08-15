@@ -22,7 +22,7 @@ export default function VoiceEnginePage() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
   useEffect(() => {
-    getSetting('workMode', 'server').then((value) => {
+    getSetting('workMode', 'local').then((value) => {
       const v = value as WorkMode
       if (v === 'server' || v === 'cloud_api' || v === 'local') setWorkMode(v)
     })
