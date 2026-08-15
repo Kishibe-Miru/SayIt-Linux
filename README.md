@@ -1,180 +1,203 @@
 <div align="center">
 
-<img src="docs/images/readme/icon.png" width="80" height="80" alt="SayIt">
+<img src="docs/images/readme/icon.png" width="88" height="88" alt="SayIt Linux">
 
-# SayIt
+# SayIt-Linux
 
-**Just say it, and write well**
+**面向 Linux 桌面的开源 AI 语音输入工具**
 
-Open-source voice typing for Windows. Press a shortcut and speak—SayIt transcribes, cleans up, and inserts polished text wherever your cursor is.
+按下快捷键说话，SayIt 完成语音识别、文本整理，并把结果直接输入到当前光标位置。
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/crosswk/SayIt/releases/latest)
-[![Linux Port](https://img.shields.io/badge/Linux-source%20build-FCC624?logo=linux&logoColor=black)](docs/Linux.md)
-[![Latest release](https://img.shields.io/github/v/release/crosswk/SayIt?label=release)](https://github.com/crosswk/SayIt/releases/latest)
+[![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](docs/Linux.md)
+[![GNOME Wayland](https://img.shields.io/badge/GNOME-Wayland-4A86CF?logo=gnome&logoColor=white)](docs/Linux.md)
+[![Fcitx5 / IBus](https://img.shields.io/badge/Input-Fcitx5%20%2F%20IBus-5E5E5E)](docs/Linux.md)
 
-**[Download for Windows](https://github.com/crosswk/SayIt/releases/latest)** · **[Try the web demo](https://sayitapp.site)** · **[简体中文](README.zh-CN.md)**
+**中文** · [English](README.en.md) · [Linux 使用与开发说明](docs/Linux.md) · [问题反馈](https://github.com/Kishibe-Miru/SayIt-Linux/issues)
 
 </div>
 
 <div align="center">
 
-<img src="docs/images/readme/demo-en.gif" width="820" alt="SayIt in action: pressing the shortcut, speaking, and the cleaned-up text appearing at the cursor">
+<img src="docs/images/readme/demo-zh.gif" width="820" alt="SayIt 语音输入演示">
 
-*Trigger the shortcut, speak, and the cleaned-up text is typed in at your cursor — no window switching.*
+*不用切换窗口，也不用手动复制粘贴：说完后，文字直接落在正在编辑的位置。*
 
 </div>
 
-## Why SayIt?
+## 这是什么
 
-Typing is often the slowest part of working with AI. SayIt turns speech into text you can use immediately, while keeping the important choices in your hands:
+SayIt-Linux 是 [crosswk/SayIt](https://github.com/crosswk/SayIt) 的社区 Linux 移植版，保留了录音、语音识别、AI 文本整理、热词、历史记录和悬浮窗等核心能力，并补齐 Linux 桌面的全局快捷键与文字提交链路。
 
-- **Voice typing anywhere** — dictate into editors, chat apps, browsers, and other Windows software.
-- **Editable AI cleanup** — remove filler words, repair recognition errors, format ideas, or keep a faithful transcript. Every prompt is yours to change.
-- **Flexible speech recognition** — use a cloud ASR provider, run a local GGUF model on your own GPU, connect to the public trial server, or host your own backend.
-- **English and Chinese interface** — the UI follows your system language and can be switched at any time.
-- **Hotwords and per-app rules** — improve names and technical terms, then change cleanup behavior automatically for different apps.
-- **Overlay feedback** — a small waveform overlay shows recording state and elapsed time, with optional live captions while you speak.
-- **Transparent data flow** — the app shows which mode is active and where audio and text are processed.
-- **Local history and diagnostics** — review recordings, re-transcribe them, and collect useful troubleshooting details without guesswork.
+它不是用来替换 Rime、拼音或其他键盘输入法的完整输入法框架。更准确地说，它是一层**语音输入能力**：继续使用你熟悉的 Fcitx5、Rime 或 IBus，需要口述时再调用 SayIt。
 
-## Choose how it runs
+### 当前验证环境
 
-| Mode | Best for | Data flow |
+- Ubuntu 26.04 LTS
+- GNOME 50.1 原生 Wayland
+- Fcitx5 5.1.19 + Rime
+- x86_64 Debian/Ubuntu 打包布局
+
+其他 Linux 桌面也保留了兼容路径，但不同合成器、Portal 和输入法环境的支持程度可能不同，详见[兼容性说明](docs/Linux.md#当前支持情况)。
+
+## 核心能力
+
+- **任意输入框口述**：在编辑器、浏览器、聊天软件等当前焦点输入框中提交识别结果。
+- **GNOME Wayland 全局快捷键**：通过 XDG GlobalShortcuts Portal 注册，不依赖 X11 键盘钩子。
+- **Fcitx5 / IBus 原生提交**：优先在输入法上下文中直接提交文字，并保留 `wtype`、`ydotool`、`xdotool` 和剪贴板兜底。
+- **本地离线识别**：默认使用本地模式，可下载 SenseVoice、Fun-ASR Nano、Qwen3-ASR、Parakeet、Nemotron 等 GGUF 模型。
+- **云端识别可选**：支持豆包、千问、小米 MiMo、Groq Whisper 等服务。
+- **AI 文本整理**：去除口头语、修正识别错误、自动分段；Prompt 可以自行修改，也能按应用切换规则。
+- **隐私路径清晰**：本地模式关闭 AI 整理后，音频和文本无需离开设备；云 API 与服务器模式会明确显示数据去向。
+- **热词与历史记录**：维护专业词表，搜索、收藏、回放和重新识别本地历史记录。
+- **轻量悬浮窗**：显示录音状态、时长和实时波形；默认采用黑底白色波形主题。
+
+## 默认操作
+
+| 操作 | 默认快捷键 | 行为 |
 | --- | --- | --- |
-| **Local mode** | Privacy and offline use | Speech recognition stays on your PC. With AI cleanup off, nothing leaves the device. |
-| **Cloud API mode** | The best balance for personal use | Your PC talks directly to the ASR and AI providers you configure. No SayIt server is involved. |
-| **Server mode** | Teams and managed deployments | Audio is processed by a SayIt backend you control—or by the public trial server for a quick start. |
+| 按住说话 | `Alt + Space` | 按住开始录音，松开后识别并输入 |
+| 免提录音 | `Alt + L` | 按一次开始，再按一次结束 |
+| 取消本次识别 | `Esc` | 不插入文字，也不保留本次录音 |
 
-Local recognition ships seven GGUF models, with GPU acceleration when available: Parakeet Unified EN (fastest and most accurate for English), SenseVoice Small, Fun-ASR Nano, Nemotron 3.5 ASR (32 languages), and three Qwen3-ASR sizes. Cloud recognition supports Doubao, Qwen, Xiaomi MiMo, and Groq Whisper; AI cleanup works with DeepSeek, Qwen, Groq, MiMo, Ollama, and any OpenAI-compatible endpoint.
+首次在 GNOME Wayland 中启动时，桌面可能弹出全局快捷键授权或绑定窗口；确认一次后由系统保存。
 
-## A closer look
+## 三种工作模式
+
+| 模式 | 适合场景 | 数据流向 |
+| --- | --- | --- |
+| **本地模式（默认）** | 离线使用、重视隐私 | ASR 在本机运行；关闭 AI 整理后数据全程留在本地 |
+| **云 API 模式** | 个人长期使用、希望获得更高识别精度 | 客户端直接连接你配置的 ASR 与 AI 服务商 |
+| **服务器模式** | 团队、内网或集中部署 | 客户端连接自建 SayIt 后端 |
+
+本地模型首次使用前需要在“设置 → 语音引擎”中下载。没有下载模型时，应用会显示“待配置”，不会假装已经就绪。
+
+## 界面预览
 
 <div align="center">
 
-<img src="docs/images/readme/home-en.png" width="760" alt="SayIt home screen showing dictation stats and a feedback box">
+<img src="docs/images/readme/home-zh.png" width="760" alt="SayIt Linux 首页">
 
-*Home — dictation stats, the active shortcut, and a feedback box that carries your last transcript.*
-
-<br>
-
-<img src="docs/images/readme/voice-engine-en.png" width="760" alt="Voice engine settings with Local, Cloud API, and Server mode cards above the model list">
-
-*Voice engine — choose Local, Cloud API, or Server mode, then download and switch recognition models. Detected GPUs are used automatically.*
+*首页 — 使用统计、当前快捷键与最近一次语音输入反馈。*
 
 <br>
 
-<img src="docs/images/readme/ai-cleanup-en.png" width="760" alt="AI cleanup settings showing built-in presets and per-app prompt rules">
+<img src="docs/images/readme/voice-engine-zh.png" width="760" alt="SayIt Linux 语音引擎设置">
 
-*AI cleanup — every built-in preset is editable, and per-app rules can switch presets based on the app you are typing into.*
-
-<br>
-
-<img src="docs/images/readme/ai-providers-en.png" width="760" alt="AI providers grid with measured response times on each model card">
-
-*AI providers — bring your own keys, add any OpenAI-compatible endpoint, and test round-trip latency on every card.*
+*语音引擎 — 切换本地、云 API、服务器模式，并管理识别模型。*
 
 <br>
 
-<img src="docs/images/readme/history-en.png" width="760" alt="History list with search, raw ASR text, timings, and playback controls">
+<img src="docs/images/readme/appearance-zh.png" width="760" alt="SayIt Linux 外观设置">
 
-*History — searchable local records. Expand one to see the raw ASR text, timings, audio playback, and re-transcribe.*
-
-<br>
-
-<img src="docs/images/readme/appearance-en.png" width="760" alt="Appearance settings with app themes, waveform themes, overlay width, and a live overlay preview">
-
-*Appearance — three app themes, waveform styles, overlay width, and live captions with a preview of the overlay.*
+*外观 — 应用主题、波形样式、悬浮窗长度与实时字幕预览。*
 
 </div>
 
-## Get started
+## 安装与构建
 
-1. Download the latest [Windows installer](https://github.com/crosswk/SayIt/releases/latest).
-2. Open SayIt and choose a voice engine. The default public server is enough for a quick trial.
-3. Press the configured shortcut in any app and speak. By default you press once to start and again to finish; hold-to-talk is available too, under a separate shortcut.
+当前仓库以源码构建为主。推荐在 x86_64 Ubuntu/Debian 上构建 `.deb`；安装 `.deb` 时会一并安装 Portal 标识、Fcitx5 模块和 IBus 引擎。
 
-For regular use, choose Local mode or add your own cloud provider keys from the in-app settings. The provider console links are available beside each key field.
-
-## Self-hosting
-
-The backend combines FastAPI, WebSocket streaming, Qwen3-ASR, and an optional OpenAI-compatible cleanup model. Docker Compose is the recommended deployment path.
+### 1. 安装系统依赖
 
 ```bash
-git clone https://github.com/crosswk/SayIt.git
-cd SayIt/server
-cp config.example.yaml config.yaml
-cp .env.example .env
-# Add your provider and deployment settings to .env/config.yaml
-docker compose up -d --build
+sudo apt update
+sudo apt install -y \
+  build-essential curl file libssl-dev libgtk-3-dev \
+  libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+  libasound2-dev cmake patchelf ninja-build extra-cmake-modules \
+  libfcitx5core-dev libfcitx5utils-dev gstreamer1.0-plugins-bad
 ```
 
-GPU speech recognition requires an NVIDIA GPU; 16 GB or more of VRAM is recommended for the default server model. See the [server guide](server/README.md) for configuration, deployment, security, and API details.
+还需要 Node.js 24 LTS、Rust 1.97.1（仓库已提供 `rust-toolchain.toml`）和 Git。
 
-## Performance reference
+### 2. 构建安装包
 
-Qwen3-ASR-1.7B with vLLM on an AWS EC2 `g5.xlarge` (NVIDIA A10G 24 GB):
+```bash
+git clone https://github.com/Kishibe-Miru/SayIt-Linux.git
+cd SayIt-Linux/client
+npm ci
+npm run tauri:linux
+```
 
-| Audio length | ASR latency | RTF |
-| --- | --- | --- |
-| 30 seconds | ~0.8 s | 0.025 |
-| 1 minute | ~1.6 s | 0.026 |
-| 2 minutes | ~2.1 s | 0.017 |
-| 3 minutes | ~2.5 s | 0.014 |
-| 5 minutes | ~3.0 s | 0.010 |
+构建结果位于：
 
-## Development
+```text
+client/src-tauri/target/release/bundle/deb/
+client/src-tauri/target/release/bundle/appimage/
+```
 
-The Linux port supports GNOME's native Wayland global-shortcut portal and direct text commits through Fcitx5 (including Rime) or IBus. See the [Linux guide](docs/Linux.md) for platform dependencies, installation, and packaging.
+安装 `.deb`：
 
-### Desktop client
+```bash
+sudo apt install ./src-tauri/target/release/bundle/deb/*.deb
+```
+
+安装后重启 Fcitx5，或退出并重新登录：
+
+```bash
+fcitx5 -rd
+```
+
+> AppImage 无法自行安装系统级输入法模块。使用 AppImage 或直接从源码运行时，请先按照 [Linux 说明](docs/Linux.md)安装 Portal 标识与 Fcitx5/IBus 集成。
+
+### 3. 开发模式
 
 ```bash
 cd client
-npm install
-npm run tauri dev
+npm ci
+bash src-tauri/linux/portal/install-user.sh
+npm run tauri -- dev --config src-tauri/tauri.linux.conf.json
 ```
 
-Requirements: Node.js 18+, Rust 1.75+, CMake 3.20+, and the Vulkan SDK. The first native build compiles the C++ speech engine and may take around 20 minutes; later builds use the cache.
+首次构建会编译本地 GGUF 语音识别引擎，耗时会明显长于后续增量构建。
 
-On non-English Windows installations, set `CL=/utf-8` before building so MSVC reads UTF-8 source files correctly.
+## Linux 文字输入路径
 
-### Server
+SayIt 按以下顺序尝试把结果交给当前输入框：
 
-```bash
-cd server
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-cd backend
-uvicorn app.main:app --port 8000
-```
+1. **Fcitx5 模块**：GNOME Wayland + Fcitx5/Rime 环境的推荐方式。
+2. **IBus 引擎**：适用于完整 `ibus-daemon` 环境，需要在系统输入源中选择“SayIt Linux 语音输入”。
+3. **兼容兜底**：Wayland 尝试 `wtype`、`ydotool`，X11 尝试 `xdotool`；必要时保留到剪贴板供手动粘贴。
 
-Requirements: Python 3.10+ and, for GPU inference, an NVIDIA GPU with CUDA.
+Fcitx5/IBus 通信使用当前用户专属 Unix socket，目录权限为 `0700`、socket 权限为 `0600`；待输入文字不会写入诊断日志。
 
-## Project layout
+## 当前限制
+
+- 原生 Wayland 缺少统一的前台窗口信息接口，按应用自动选择整理规则只能尽力识别。
+- wlroots 桌面的全局快捷键支持取决于所安装的 Portal 后端，必要时需要在合成器中手动绑定。
+- `.deb` 的 Fcitx5 插件路径当前面向 x86_64 Debian/Ubuntu；ARM64 打包尚需适配。
+- 内置麦克风是否可用还取决于 Linux 内核、ALSA/PipeWire 与具体硬件驱动；外接 USB 麦克风通常不受该限制。
+- Linux 版本由社区维护，并非上游项目的官方 Linux 发行版。
+
+## 项目结构
 
 ```text
-SayIt/
-├── client/       # Tauri + React desktop client
-├── server/       # FastAPI backend, gateway, web demo, and deployment files
-├── docs/         # User guides and images
-└── dev-docs/     # Internal development notes
+SayIt-Linux/
+├── client/        # Tauri 2 + React + TypeScript 桌面客户端
+│   └── src-tauri/
+│       └── linux/ # Portal、Fcitx5、IBus 集成
+├── server/        # FastAPI、WebSocket 与可选自部署后端
+├── docs/          # 使用说明与界面图片
+└── dev-docs/      # 开发记录
 ```
 
-## Contributing
+## 验证命令
 
-Bug reports, focused pull requests, and feature discussions are welcome. Please open a [GitHub issue](https://github.com/crosswk/SayIt/issues) or read the [contribution guide](CONTRIBUTING.md) before submitting a larger change.
+```bash
+cd client
+npm test
+npm run lint
+npm run build
 
-## Contributors
+cd src-tauri
+cargo check
+```
 
-<!-- ALL-CONTRIBUTORS-LIST:START -->
-| [<img src="https://github.com/crosswk.png" width="60"><br><sub>crosswk</sub>](https://github.com/crosswk) | [<img src="https://avatars.githubusercontent.com/u/76263028" width="60"><br><sub>Claude (Anthropic)</sub>](https://claude.ai) |
-|:---:|:---:|
-<!-- ALL-CONTRIBUTORS-LIST:END -->
+## 上游、贡献与许可证
 
-## License
+本项目基于 [crosswk/SayIt](https://github.com/crosswk/SayIt) 修改，感谢原作者与所有贡献者。Windows 官方版本、网页体验和原始服务端文档请前往上游仓库。
 
-[GNU Affero General Public License v3.0](./LICENSE)
+欢迎通过 [Issues](https://github.com/Kishibe-Miru/SayIt-Linux/issues) 提交 Linux 兼容问题，也欢迎发送聚焦明确的 Pull Request。反馈时请附上发行版、桌面环境、X11/Wayland、输入法框架以及相关日志。
 
-You may use, modify, and self-host SayIt. If you distribute a modified version or run it as a network service, the corresponding source must remain available under the same license.
+项目遵循 [GNU Affero General Public License v3.0](./LICENSE)。分发修改版本或将其作为网络服务运行时，需要按照该许可证公开相应源代码。
