@@ -13,6 +13,7 @@ import { emit } from '@tauri-apps/api/event'
 import { getPTTPhysicalKeyStates } from './bridge'
 import { getSetting } from './store'
 import { getDefault } from './defaults'
+import { DEFAULT_HANDS_FREE_SHORTCUT } from '@/lib/platform'
 import {
   canonicalizePTTShortcut,
   isPTTModifierCode,
@@ -287,10 +288,10 @@ export async function refreshPTTSetting() {
   releasePTT('setting_refreshed')
 
   try {
-    const hfSettingVal = await getSetting('shortcutHandsFree', 'AltRight')
-    hfSetting = String(hfSettingVal ?? 'AltRight')
+    const hfSettingVal = await getSetting('shortcutHandsFree', DEFAULT_HANDS_FREE_SHORTCUT)
+    hfSetting = String(hfSettingVal ?? DEFAULT_HANDS_FREE_SHORTCUT)
   } catch {
-    hfSetting = 'AltRight'
+    hfSetting = DEFAULT_HANDS_FREE_SHORTCUT
   }
   hfCode = settingToCode(hfSetting)
   hfKeyDown = false

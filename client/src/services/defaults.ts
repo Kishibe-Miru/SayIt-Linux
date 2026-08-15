@@ -26,8 +26,8 @@ export const DEFAULTS: Record<string, unknown> = {
   // 按住说话。旧单键保持 DOM code；组合键使用物理 code 格式，如 'ControlLeft+MetaLeft' 或 'ControlLeft+KeyK'。
   // ⚠️ 默认键不能用 Shift：长按右 Shift 约 8 秒会触发 Windows 筛选键，导致松开后录音停不下来
   // （详见 lib/shortcutKeys.ts 的 PTT_FORBIDDEN_CODES）。这里曾经是 'ShiftRight'，
-  // 于是每台新装的机器开箱就绑在那个键上。右 Ctrl 位置相近、没有辅助功能陷阱，
-  // 也不和免提的默认键（右 Alt）撞。
+  // 于是每台新装的 Windows 机器开箱就绑在那个键上。Windows 使用右 Ctrl；
+  // Linux 使用 Alt + Space，免提使用 Alt + L。
   // ⚠️ 改这里要同步 Rust：src-tauri/src/storage/mod.rs 的种子默认值、main.rs 的兜底、
   // keyboard/mod.rs 的 PttKeyConfig::fallback()。
   shortcutPTT: DEFAULT_PTT_SHORTCUT,

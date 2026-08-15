@@ -307,9 +307,12 @@ export function getAcceleratorShortcutValidationError(accelerator: string): stri
   if (!IS_LINUX && has('Meta') && mainKey) {
     return t('shortcut.error.reservedWindows')
   }
+  const reservedAltMainKeys = IS_LINUX
+    ? ['F4', 'Tab', 'Escape']
+    : ['F4', 'Tab', 'Escape', 'Space']
   if (has('Alt')
     && (!IS_LINUX || (!has('Control') && !has('Meta')))
-    && ['F4', 'Tab', 'Escape', 'Space'].includes(mainKey)) {
+    && reservedAltMainKeys.includes(mainKey)) {
     return t('shortcut.error.reservedAlt')
   }
   if (has('Control') && mainKey === 'Escape') {
@@ -395,9 +398,12 @@ export function getPTTShortcutValidationError(
   if (!IS_LINUX && hasFamily('Meta') && mainKey) {
     return t('shortcut.error.reservedWindows')
   }
+  const reservedAltMainKeys = IS_LINUX
+    ? ['F4', 'Tab', 'Escape']
+    : ['F4', 'Tab', 'Escape', 'Space']
   if (hasFamily('Alt')
     && (!IS_LINUX || (!hasFamily('Control') && !hasFamily('Meta')))
-    && ['F4', 'Tab', 'Escape', 'Space'].includes(mainKey)) {
+    && reservedAltMainKeys.includes(mainKey)) {
     return t('shortcut.error.reservedAlt')
   }
   if (hasFamily('Control') && mainKey === 'Escape') {

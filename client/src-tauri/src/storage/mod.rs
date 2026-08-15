@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[cfg(target_os = "linux")]
-const DEFAULT_PTT_SETTING_JSON: &str = r#""ControlLeft+AltLeft+Space""#;
+const DEFAULT_PTT_SETTING_JSON: &str = r#""AltLeft+Space""#;
 #[cfg(not(target_os = "linux"))]
 const DEFAULT_PTT_SETTING_JSON: &str = r#""ControlRight""#;
 
 #[cfg(target_os = "linux")]
-const DEFAULT_HANDS_FREE_SETTING_JSON: &str = r#""Control+Alt+L""#;
+const DEFAULT_HANDS_FREE_SETTING_JSON: &str = r#""Alt+L""#;
 #[cfg(not(target_os = "linux"))]
 const DEFAULT_HANDS_FREE_SETTING_JSON: &str = r#""AltRight""#;
 
@@ -99,6 +99,29 @@ impl Storage {
             db.execute(
                 "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
                 params![2, "add-audio-file-path", chrono::Utc::now().timestamp_millis()],
+            )?;
+        }
+
+        // Migration 3: Linux 默认快捷键改为更简洁的 Alt 组合。
+        // 只迁移仍等于旧 Linux 默认值的记录，保留用户自行设置的快捷键。
+        if !Self::migration_exists(&db, 3)? {
+            #[cfg(target_os = "linux")]
+            {
+                let now = chrono::Utc::now().timestamp_millis();
+                db.execute(
+                    "UPDATE app_settings SET value_json = ?1, updated_at = ?2
+                     WHERE key = 'shortcutPTT' AND value_json = ?3",
+                    params![DEFAULT_PTT_SETTING_JSON, now, r#""ControlLeft+AltLeft+Space""#],
+                )?;
+                db.execute(
+                    "UPDATE app_settings SET value_json = ?1, updated_at = ?2
+                     WHERE key = 'shortcutHandsFree' AND value_json = ?3",
+                    params![DEFAULT_HANDS_FREE_SETTING_JSON, now, r#""Control+Alt+L""#],
+                )?;
+            }
+            db.execute(
+                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
+                params![3, "simplify-linux-recording-shortcuts", chrono::Utc::now().timestamp_millis()],
             )?;
         }
 

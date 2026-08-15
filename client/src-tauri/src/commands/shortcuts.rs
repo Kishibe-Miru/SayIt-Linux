@@ -259,8 +259,8 @@ mod linux_shortcut_tests {
     #[test]
     fn converts_linux_default_ptt_chord() {
         assert_eq!(
-            linux_ptt_accelerator("ControlLeft+AltLeft+Space").as_deref(),
-            Some("Control+Alt+Space")
+            linux_ptt_accelerator("AltLeft+Space").as_deref(),
+            Some("Alt+Space")
         );
         assert_eq!(
             linux_ptt_accelerator("MetaLeft+KeyV").as_deref(),

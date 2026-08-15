@@ -310,12 +310,12 @@ mod tests {
     #[test]
     fn converts_dom_and_tauri_shortcuts_to_portal_syntax() {
         assert_eq!(
-            portal_trigger("ControlLeft+AltLeft+Space").as_deref(),
-            Some("<Ctrl><Alt>space")
+            portal_trigger("AltLeft+Space").as_deref(),
+            Some("<Alt>space")
         );
         assert_eq!(
-            portal_trigger("Control+Alt+L").as_deref(),
-            Some("<Ctrl><Alt>l")
+            portal_trigger("Alt+L").as_deref(),
+            Some("<Alt>l")
         );
         assert_eq!(portal_trigger("ControlRight"), None);
         assert_eq!(portal_trigger("ControlLeft+MButton"), None);

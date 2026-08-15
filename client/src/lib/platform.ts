@@ -4,9 +4,9 @@ export const IS_LINUX = typeof window !== 'undefined'
   && /Linux/i.test(navigator.userAgent)
 
 export const DEFAULT_PTT_SHORTCUT = IS_LINUX
-  ? 'ControlLeft+AltLeft+Space'
+  ? 'AltLeft+Space'
   : 'ControlRight'
 
 export const DEFAULT_HANDS_FREE_SHORTCUT = IS_LINUX
-  ? 'Control+Alt+L'
+  ? 'Alt+L'
   : 'AltRight'
