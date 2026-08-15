@@ -87,6 +87,7 @@
   "shortcut.error.tooManyMainKeys": "A combination can include only one non-modifier key",
   "shortcut.error.needModifier": "A regular combination needs at least one Ctrl, Win or Alt",
   "shortcut.error.needTwoModifiers": "A modifier-only combination needs at least two keys",
+  "shortcut.error.linuxNeedsCombination": "On Linux, hold to talk needs Ctrl, Alt or Super plus one regular key",
   "shortcut.error.reservedCtrlAltDel": "Ctrl + Alt + Delete is reserved by Windows. Pick another one.",
   "shortcut.error.reservedWindows": "Windows-key combinations with a main key are reserved by the system. Use a modifier-only combination such as Ctrl + Win, or pick different keys.",
   "shortcut.error.reservedAlt": "That Alt system combination closes or switches windows, or opens a system menu. Pick another one.",

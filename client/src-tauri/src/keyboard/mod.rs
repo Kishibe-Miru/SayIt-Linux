@@ -254,6 +254,25 @@ impl PttKeyConfig {
 const DEFAULT_PTT_SETTING: &str = "ControlRight";
 const DEFAULT_PTT_VK: u32 = 0xA3;
 
+/// Platform defaults exposed to startup/storage callers. Linux cannot install the
+/// Win32 low-level single-key hook, so it uses shortcuts representable by Tauri's
+/// global-shortcut backend.
+pub fn default_ptt_setting() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "ControlLeft+AltLeft+Space"
+    } else {
+        DEFAULT_PTT_SETTING
+    }
+}
+
+pub fn default_hands_free_setting() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "Control+Alt+L"
+    } else {
+        "AltRight"
+    }
+}
+
 /// 解析向后兼容的 PTT 物理键格式。旧单键仍是单成员；组合成员用 `+` 分隔。
 ///
 /// 非法或未知非空值安全回退到默认键，避免整串被误当成别的键。
@@ -404,7 +423,6 @@ struct HookSharedState {
 }
 
 /// Message sent from the hook callback (non-blocking) to the dispatcher thread.
-#[cfg(windows)]
 #[allow(dead_code)]
 enum HookAction {
     PttDown { vk: u32, gen: u64 },

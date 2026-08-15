@@ -1,6 +1,12 @@
 use std::path::{Path, PathBuf};
 
 fn main() {
+    // Linux 开发构建把运行库放在可执行文件同级；deb/AppImage 则把资源放到
+    // usr/lib/SayIt。两处都写入相对 rpath，避免把本机构建目录烘进发布包。
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN:$ORIGIN/../lib/SayIt");
+    }
+
     // 必须在 tauri_build::build() 之前：tauri.conf.json 里把 transcribe-libs/*
     // 声明成打包资源，而 tauri_build 在构建期就会校验这个 glob 能不能匹配到文件。
     // 目录是这一步生成的，顺序反了会报
@@ -13,10 +19,10 @@ fn main() {
 /// 把 transcribe-cpp 的运行时库 + ggml 后端模块放到两个地方：
 ///
 /// 1. `target/<profile>/` —— 挨着 dev/release 可执行文件，`cargo tauri dev` 和直接
-///    跑 exe 时 `init_backends_default()` 才找得到模块。找不到的话注册 0 个设备，
+///    跑可执行文件时 `init_backends_default()` 才找得到模块。找不到的话注册 0 个设备，
 ///    加载 GGUF 模型直接报 TRANSCRIBE_ERR_BACKEND。
 /// 2. `transcribe-libs/` —— 给 tauri 打包器当资源用（tauri.conf.json 里映射到 exe
-///    同级目录），这样安装出来的应用也带着这些 DLL。
+///    同级目录），这样安装出来的应用也带着这些 DLL/.so/.dylib。
 ///
 /// 静态构建（没开 dynamic-backends/shared）时 `DEP_TRANSCRIBE_CPP_*` 不存在，
 /// 整个函数是 no-op。
@@ -51,6 +57,14 @@ fn stage_transcribe_runtime_libs() {
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).expect("创建 transcribe-libs 目录");
 
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let is_runtime_library = |name: &str| match target_os.as_str() {
+        "windows" => name.to_ascii_lowercase().ends_with(".dll"),
+        "macos" => name.ends_with(".dylib"),
+        // Linux 的 SONAME 链接可能是 libfoo.so 或 libfoo.so.0，两种都带上。
+        _ => name.ends_with(".so") || name.contains(".so."),
+    };
+
     let mut copied = 0usize;
     for dir in &dirs {
         println!("cargo:rerun-if-changed={}", dir.display());
@@ -60,7 +74,7 @@ fn stage_transcribe_runtime_libs() {
         for entry in entries.flatten() {
             let src = entry.path();
             let name = match src.file_name().and_then(|s| s.to_str()) {
-                Some(n) if n.ends_with(".dll") => n.to_string(),
+                Some(n) if is_runtime_library(n) => n.to_string(),
                 _ => continue,
             };
             copy_to(&src, &profile_dir, &name);
@@ -71,11 +85,11 @@ fn stage_transcribe_runtime_libs() {
 
     if copied == 0 {
         panic!(
-            "transcribe-cpp 是 shared/dynamic-backends 构建，但在 {dirs:?} 里没找到任何 DLL；\
+            "transcribe-cpp 是 shared/dynamic-backends 构建，但在 {dirs:?} 里没找到任何运行时库；\
              这样打出来的包会注册 0 个计算设备、本地 GGUF 模型加载必失败"
         );
     }
-    println!("cargo:warning=staged {copied} transcribe/ggml DLL(s)");
+    println!("cargo:warning=staged {copied} transcribe/ggml runtime library file(s)");
 
     // 上面这些 DLL 是 C++ 编的，加载期就要 VC++ 运行库，必须一起分发。见下面注释。
     let crt = stage_vc_redist(&profile_dir, &staging);

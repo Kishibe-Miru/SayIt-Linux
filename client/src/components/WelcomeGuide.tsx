@@ -11,6 +11,8 @@ import {
   getSingleKeyDisplay,
   isSingleKeySetting,
 } from '@/lib/shortcutKeys'
+import { DEFAULT_HANDS_FREE_SHORTCUT, IS_LINUX } from '@/lib/platform'
+import { eventToAccelerator } from '@/features/settings/utils'
 import { refreshPTTSetting } from '@/services/webviewKeyboardFallback'
 import appIcon from '@/assets/icon-128.png'
 import { t, type TranslationKey } from '@/i18n'
@@ -110,7 +112,7 @@ interface WelcomeGuideProps {
 export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
   const t = useT()
   const [step, setStep] = useState(0)
-  const [hfKey, setHfKey] = useState('AltRight')
+  const [hfKey, setHfKey] = useState(DEFAULT_HANDS_FREE_SHORTCUT)
   const hfLabel = displayShortcut(hfKey).join(' + ')
   const [workMode, setWorkMode] = useState('')
   const [serverOk, setServerOk] = useState<boolean | null>(null)
@@ -120,11 +122,11 @@ export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
   const [keyConfirmed, setKeyConfirmed] = useState(false)
   const [keyPressed, setKeyPressed] = useState(false)
   const keyPressedRef = useRef(false)
-  const hfKeyRef = useRef('AltRight')
+  const hfKeyRef = useRef(DEFAULT_HANDS_FREE_SHORTCUT)
   const settingsDirtyRef = useRef(false)
 
   useEffect(() => {
-    getSetting('shortcutHandsFree', 'AltRight').then((k) => {
+    getSetting('shortcutHandsFree', DEFAULT_HANDS_FREE_SHORTCUT).then((k) => {
       const key = k as string
       setHfKey(key)
       hfKeyRef.current = key
@@ -167,7 +169,7 @@ export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
     const onDown = (e: KeyboardEvent) => {
       e.preventDefault()
       const code = e.code
-      if (isSingleKeySetting(code) && pressedKeyCodeRef.current !== code) {
+      if (!IS_LINUX && isSingleKeySetting(code) && pressedKeyCodeRef.current !== code) {
         confirmKey(code)
       }
     }
@@ -181,7 +183,7 @@ export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
     // 路径 2：被 Rust 钩子拦截的按键（右 Alt）—— keyup 时触发
     const unlistenHf = bridge.listen('toggle-hands-free', () => {
       // Rust 端只在 keyup 时 emit，模拟"按下-松开"的视觉反馈
-      confirmKey(hfKeyRef.current || 'AltRight')
+      confirmKey(hfKeyRef.current || DEFAULT_HANDS_FREE_SHORTCUT)
       setTimeout(() => releaseKey(), 150)
     })
 
@@ -225,17 +227,17 @@ export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
     if (!listeningKey) return
     const handler = (e: KeyboardEvent) => {
       e.preventDefault()
-      const code = e.code
-      if (isSingleKeySetting(code)) {
-        setHfKey(code)
+      const shortcut = IS_LINUX ? eventToAccelerator(e) : (isSingleKeySetting(e.code) ? e.code : null)
+      if (shortcut) {
+        setHfKey(shortcut)
         void (async () => {
-          await setSetting('shortcutHandsFree', code)
+          await setSetting('shortcutHandsFree', shortcut)
           bridge.notifyShortcutsChanged()
           // 同步刷新 webview 回退缓存，否则向导内测试时新键不生效
           await refreshPTTSetting()
         })()
+        setListeningKey(false)
       }
-      setListeningKey(false)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -296,7 +298,7 @@ export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
             <p className="mt-2 text-sm text-muted-foreground">
               {keyConfirmed
                 ? t('welcome.hotkeyConfirmed')
-                : <HotkeyPrompt template={t('welcome.hotkeyPrompt')} keyLabel={getSingleKeyDisplay('AltRight')} />}
+                : <HotkeyPrompt template={t('welcome.hotkeyPrompt')} keyLabel={IS_LINUX ? hfLabel : getSingleKeyDisplay('AltRight')} />}
             </p>
 
             {/* 大号按键展示 */}
@@ -314,10 +316,12 @@ export default function WelcomeGuide({ onComplete }: WelcomeGuideProps) {
             </div>
 
             {/* 键盘位置示意 */}
-            <div className="w-full rounded-xl border bg-card p-3">
-              <p className="mb-2 text-[11px] text-muted-foreground">{t('welcome.keyPosition')}</p>
-              <KeyboardHint activeKey={hfKey} pressed={keyPressed} />
-            </div>
+            {!IS_LINUX && (
+              <div className="w-full rounded-xl border bg-card p-3">
+                <p className="mb-2 text-[11px] text-muted-foreground">{t('welcome.keyPosition')}</p>
+                <KeyboardHint activeKey={hfKey} pressed={keyPressed} />
+              </div>
+            )}
 
             {!keyConfirmed && (
               <p className="mt-4 text-xs text-muted-foreground/60">

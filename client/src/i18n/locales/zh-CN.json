@@ -87,6 +87,7 @@
   "shortcut.error.tooManyMainKeys": "组合键最多只能包含一个非修饰键",
   "shortcut.error.needModifier": "普通组合键至少需要一个 Ctrl、Win 或 Alt",
   "shortcut.error.needTwoModifiers": "纯修饰键组合至少需要两个按键",
+  "shortcut.error.linuxNeedsCombination": "Linux 版的按住说话需要「Ctrl/Alt/Super + 一个普通键」组合",
   "shortcut.error.reservedCtrlAltDel": "Ctrl + Alt + Delete 是系统保留组合，请更换",
   "shortcut.error.reservedWindows": "带 Windows 键的系统组合由 Windows 保留，请改用 Ctrl + Win 这类纯修饰键组合或更换按键",
   "shortcut.error.reservedAlt": "该 Alt 系统组合会关闭、切换窗口或打开系统菜单，请更换",

@@ -1,3 +1,5 @@
+import { IS_LINUX } from '@/lib/platform'
+
 export type OverlayWaveTheme = 'black-white' | 'black-blue' | 'black-rainbow'
 
 // 快捷键映射已收敛到 @/lib/shortcutKeys（单一数据源），这里透传导出以保持既有引用不变。
@@ -13,7 +15,12 @@ export function cleanMicLabel(label: string): string {
 
 export function eventToAccelerator(event: KeyboardEvent): string | null {
   const parts: string[] = []
-  if (event.ctrlKey || event.metaKey) parts.push('CommandOrControl')
+  if (IS_LINUX) {
+    if (event.ctrlKey) parts.push('Control')
+    if (event.metaKey) parts.push('Super')
+  } else if (event.ctrlKey || event.metaKey) {
+    parts.push('CommandOrControl')
+  }
   if (event.altKey) parts.push('Alt')
   if (event.shiftKey) parts.push('Shift')
 

@@ -9,6 +9,8 @@
  *   - 应用 Prompt 规则 → src/services/personalization/defaults.ts 的 BUILTIN_APP_RULES
  */
 
+import { DEFAULT_HANDS_FREE_SHORTCUT, DEFAULT_PTT_SHORTCUT } from '@/lib/platform'
+
 export const DEFAULTS: Record<string, unknown> = {
 
   // ── 界面语言 ──
@@ -28,8 +30,8 @@ export const DEFAULTS: Record<string, unknown> = {
   // 也不和免提的默认键（右 Alt）撞。
   // ⚠️ 改这里要同步 Rust：src-tauri/src/storage/mod.rs 的种子默认值、main.rs 的兜底、
   // keyboard/mod.rs 的 PttKeyConfig::fallback()。
-  shortcutPTT: 'ControlRight',
-  shortcutHandsFree: 'AltRight', // 免提模式。默认右 Alt 单键。也支持组合键格式如 'Control+Shift+S'
+  shortcutPTT: DEFAULT_PTT_SHORTCUT,
+  shortcutHandsFree: DEFAULT_HANDS_FREE_SHORTCUT,
 
   // ── 麦克风 ──
   selectedMic: '', // 设备 ID，空字符串 = 系统默认

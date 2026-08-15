@@ -9,6 +9,7 @@
  */
 
 import { t, type TranslationKey } from '@/i18n'
+import { IS_LINUX } from '@/lib/platform'
 
 export interface SingleKeyDef {
   /** 存入设置、也等于 DOM KeyboardEvent.code */
@@ -303,10 +304,12 @@ export function getAcceleratorShortcutValidationError(accelerator: string): stri
   if (has('Control') && has('Alt') && mainKey === 'Delete') {
     return t('shortcut.error.reservedCtrlAltDel')
   }
-  if (has('Meta') && mainKey) {
+  if (!IS_LINUX && has('Meta') && mainKey) {
     return t('shortcut.error.reservedWindows')
   }
-  if (has('Alt') && ['F4', 'Tab', 'Escape', 'Space'].includes(mainKey)) {
+  if (has('Alt')
+    && (!IS_LINUX || (!has('Control') && !has('Meta')))
+    && ['F4', 'Tab', 'Escape', 'Space'].includes(mainKey)) {
     return t('shortcut.error.reservedAlt')
   }
   if (has('Control') && mainKey === 'Escape') {
@@ -350,6 +353,9 @@ export function getPTTShortcutValidationError(
 
   if (codes.length === 1) {
     const code = codes[0]
+    if (IS_LINUX) {
+      return t('shortcut.error.linuxNeedsCombination')
+    }
     if (code === 'MetaLeft' || code === 'MetaRight') {
       return t('shortcut.error.metaAlone')
     }
@@ -373,6 +379,9 @@ export function getPTTShortcutValidationError(
   if (mainKeys.length === 1 && modifiers.length === 0) {
     return t('shortcut.error.needModifier')
   }
+  if (IS_LINUX && mainKeys.length === 0) {
+    return t('shortcut.error.linuxNeedsCombination')
+  }
   if (mainKeys.length === 0 && modifiers.length < 2) {
     return t('shortcut.error.needTwoModifiers')
   }
@@ -383,10 +392,12 @@ export function getPTTShortcutValidationError(
     return t('shortcut.error.reservedCtrlAltDel')
   }
   // 带主键的 Win 组合由 Windows Shell 保留；Ctrl + Win 这类纯修饰键组合仍可用。
-  if (hasFamily('Meta') && mainKey) {
+  if (!IS_LINUX && hasFamily('Meta') && mainKey) {
     return t('shortcut.error.reservedWindows')
   }
-  if (hasFamily('Alt') && ['F4', 'Tab', 'Escape', 'Space'].includes(mainKey)) {
+  if (hasFamily('Alt')
+    && (!IS_LINUX || (!hasFamily('Control') && !hasFamily('Meta')))
+    && ['F4', 'Tab', 'Escape', 'Space'].includes(mainKey)) {
     return t('shortcut.error.reservedAlt')
   }
   if (hasFamily('Control') && mainKey === 'Escape') {
@@ -418,7 +429,7 @@ function pttMainCodeToAccelerator(code: string): string {
 
 /**
  * 将可由 Tauri accelerator 表示的 PTT 组合转换为 accelerator。
- * 纯修饰组合以及同时包含 Ctrl 和 Win 的组合没有无损表示，返回 undefined。
+ * 纯修饰组合没有可靠的全局按下/松开事件，返回 undefined。
  */
 export function pttShortcutToAccelerator(setting: string): string | undefined {
   if (!isValidPTTShortcut(setting)) return undefined
@@ -428,11 +439,16 @@ export function pttShortcutToAccelerator(setting: string): string | undefined {
 
   const hasControl = codes.some((code) => code.startsWith('Control'))
   const hasMeta = codes.some((code) => code.startsWith('Meta'))
-  if (hasControl && hasMeta) return undefined
+  if (!IS_LINUX && hasControl && hasMeta) return undefined
 
   const parts: string[] = []
-  // 现有免提录制将 Windows 的 Ctrl/Meta 都保存为 CommandOrControl。
-  if (hasControl || hasMeta) parts.push('CommandOrControl')
+  if (IS_LINUX) {
+    if (hasControl) parts.push('Control')
+    if (hasMeta) parts.push('Super')
+  } else if (hasControl || hasMeta) {
+    // 现有 Windows 免提录制将 Ctrl/Meta 保存为 CommandOrControl。
+    parts.push('CommandOrControl')
+  }
   if (codes.some((code) => code.startsWith('Alt'))) parts.push('Alt')
   if (codes.some((code) => code.startsWith('Shift'))) parts.push('Shift')
   parts.push(pttMainCodeToAccelerator(mainKeys[0]))
@@ -440,18 +456,32 @@ export function pttShortcutToAccelerator(setting: string): string | undefined {
 }
 
 function normalizeAccelerator(accelerator: string): string {
-  const order: Record<string, number> = { CommandOrControl: 0, Alt: 1, Shift: 2 }
-  const aliases: Record<string, string> = {
-    Ctrl: 'CommandOrControl',
-    Control: 'CommandOrControl',
-    Command: 'CommandOrControl',
-    Meta: 'CommandOrControl',
-    Enter: 'Return',
-    ArrowUp: 'Up',
-    ArrowDown: 'Down',
-    ArrowLeft: 'Left',
-    ArrowRight: 'Right',
-  }
+  const order: Record<string, number> = IS_LINUX
+    ? { Control: 0, Super: 1, Alt: 2, Shift: 3 }
+    : { CommandOrControl: 0, Alt: 1, Shift: 2 }
+  const aliases: Record<string, string> = IS_LINUX
+    ? {
+        Ctrl: 'Control',
+        CommandOrControl: 'Control',
+        Command: 'Super',
+        Meta: 'Super',
+        Enter: 'Return',
+        ArrowUp: 'Up',
+        ArrowDown: 'Down',
+        ArrowLeft: 'Left',
+        ArrowRight: 'Right',
+      }
+    : {
+        Ctrl: 'CommandOrControl',
+        Control: 'CommandOrControl',
+        Command: 'CommandOrControl',
+        Meta: 'CommandOrControl',
+        Enter: 'Return',
+        ArrowUp: 'Up',
+        ArrowDown: 'Down',
+        ArrowLeft: 'Left',
+        ArrowRight: 'Right',
+      }
   return accelerator.split('+')
     .map((part) => aliases[part] || part)
     .sort((left, right) => (order[left] ?? 3) - (order[right] ?? 3) || left.localeCompare(right))

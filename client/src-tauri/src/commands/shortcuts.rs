@@ -14,16 +14,25 @@ pub fn shortcuts_changed(
     storage: State<Storage>,
     hook: State<KeyboardHookManager>,
 ) {
-    // Read settings
-    let ptt_setting = storage.get("shortcutPTT", None);
-    // 兜底键与 keyboard::DEFAULT_PTT_SETTING、storage 种子、前端 defaults.ts 一致。
-    // 绝不能是 Shift：长按右 Shift 会触发 Windows 筛选键，录音就停不下来了。
-    let ptt_str = ptt_setting.as_str().unwrap_or("ControlRight");
-    let hf_val = storage.get("shortcutHandsFree", None);
-    let hf_key = hf_val.as_str().unwrap_or("AltRight");
-
     // Reconfigure PTT + hands-free keyboard hook
-    hook.reconfigure(&app, ptt_str, hf_key);
+    #[cfg(target_os = "windows")]
+    {
+        let ptt_setting = storage.get("shortcutPTT", None);
+        // 兜底键与 keyboard 默认值、storage 种子、前端 defaults.ts 一致。
+        // 绝不能是 Shift：长按右 Shift 会触发 Windows 筛选键。
+        let ptt_str = ptt_setting
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| crate::keyboard::default_ptt_setting().to_owned());
+        let hf_val = storage.get("shortcutHandsFree", None);
+        let hf_key = hf_val
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| crate::keyboard::default_hands_free_setting().to_owned());
+        hook.reconfigure(&app, &ptt_str, &hf_key);
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = hook;
 
     // 重新注册所有 global_shortcut（免提组合键 + 各润色模式切换快捷键）
     register_all_global_shortcuts(&app, storage.inner());
@@ -39,9 +48,69 @@ pub fn register_all_global_shortcuts(app: &AppHandle, storage: &Storage) {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
 
+    // Linux 没有 Windows 的 WH_KEYBOARD_LL 单键钩子。将 PTT 物理组合键
+    // 折叠成 Tauri accelerator，并直接使用 Pressed/Released 事件驱动录音。
+    #[cfg(target_os = "linux")]
+    {
+        let ptt_setting = storage
+            .get("shortcutPTT", None)
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| crate::keyboard::default_ptt_setting().to_owned());
+        if let Some(accelerator) = linux_ptt_accelerator(&ptt_setting) {
+            let setting_for_event = ptt_setting.clone();
+            let accelerator_for_log = accelerator.clone();
+            if let Err(error) = gs.on_shortcut(
+                accelerator.as_str(),
+                move |app, _shortcut, event| {
+                    let (reason, phase) = if event.state == ShortcutState::Pressed {
+                        ("keydown", "ptt-down")
+                    } else {
+                        ("keyup", "ptt-up")
+                    };
+                    let _ = app.emit(
+                        phase,
+                        serde_json::json!({
+                            "source": "linux_global_shortcut",
+                            "reason": reason,
+                            "keycode": 0,
+                            "pttSetting": setting_for_event.clone(),
+                            "timestamp": chrono::Utc::now().timestamp_millis(),
+                            "altKey": setting_for_event.contains("Alt"),
+                            "ctrlKey": setting_for_event.contains("Control"),
+                            "shiftKey": setting_for_event.contains("Shift"),
+                            "metaKey": setting_for_event.contains("Meta"),
+                        }),
+                    );
+                },
+            ) {
+                log::error!(
+                    "Failed to register Linux PTT shortcut '{}' (setting '{}'): {}",
+                    accelerator_for_log,
+                    ptt_setting,
+                    error
+                );
+            } else {
+                log::info!(
+                    "Registered Linux PTT shortcut: {} (setting={})",
+                    accelerator_for_log,
+                    ptt_setting
+                );
+            }
+        } else {
+            log::error!(
+                "Linux PTT shortcut '{}' is not representable as a global accelerator; use modifier(s) + one main key",
+                ptt_setting
+            );
+        }
+    }
+
     // 免提组合键
     let hf_val = storage.get("shortcutHandsFree", None);
-    let hf_key = hf_val.as_str().unwrap_or("AltRight").to_string();
+    let hf_key = hf_val
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| crate::keyboard::default_hands_free_setting().to_owned());
     if !hf_key.is_empty() && hf_key.contains('+') {
         if let Err(e) = gs.on_shortcut(hf_key.as_str(), move |app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
@@ -82,6 +151,100 @@ pub fn register_all_global_shortcuts(app: &AppHandle, storage: &Storage) {
                 );
             }
         }
+    }
+}
+
+/// Convert the DOM physical-code format used by PTT settings into a Tauri accelerator.
+/// Linux global shortcuts cannot preserve left/right modifier identity and require one
+/// non-modifier key, so single keys and modifier-only chords deliberately return None.
+#[cfg(any(target_os = "linux", test))]
+fn linux_ptt_accelerator(setting: &str) -> Option<String> {
+    let codes = setting
+        .split('+')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if codes.is_empty() {
+        return None;
+    }
+
+    let has_control = codes.iter().any(|code| code.starts_with("Control"));
+    let has_meta = codes.iter().any(|code| code.starts_with("Meta"));
+
+    let mut main_keys = codes
+        .iter()
+        .filter(|code| {
+            !code.starts_with("Control")
+                && !code.starts_with("Meta")
+                && !code.starts_with("Alt")
+                && !code.starts_with("Shift")
+        })
+        .copied();
+    let main = main_keys.next()?;
+    if main_keys.next().is_some() {
+        return None;
+    }
+
+    let main = if let Some(letter) = main.strip_prefix("Key") {
+        letter.to_string()
+    } else if let Some(digit) = main.strip_prefix("Digit") {
+        digit.to_string()
+    } else {
+        match main {
+            "Enter" => "Return".to_string(),
+            "ArrowUp" => "Up".to_string(),
+            "ArrowDown" => "Down".to_string(),
+            "ArrowLeft" => "Left".to_string(),
+            "ArrowRight" => "Right".to_string(),
+            "XButton1" | "XButton2" | "MButton" => return None,
+            other => other.to_string(),
+        }
+    };
+
+    let mut parts = Vec::new();
+    if has_control {
+        parts.push("Control".to_string());
+    }
+    if has_meta {
+        parts.push("Super".to_string());
+    }
+    if codes.iter().any(|code| code.starts_with("Alt")) {
+        parts.push("Alt".to_string());
+    }
+    if codes.iter().any(|code| code.starts_with("Shift")) {
+        parts.push("Shift".to_string());
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    parts.push(main);
+    Some(parts.join("+"))
+}
+
+#[cfg(test)]
+mod linux_shortcut_tests {
+    use super::linux_ptt_accelerator;
+
+    #[test]
+    fn converts_linux_default_ptt_chord() {
+        assert_eq!(
+            linux_ptt_accelerator("ControlLeft+AltLeft+Space").as_deref(),
+            Some("Control+Alt+Space")
+        );
+        assert_eq!(
+            linux_ptt_accelerator("MetaLeft+KeyV").as_deref(),
+            Some("Super+V")
+        );
+        assert_eq!(
+            linux_ptt_accelerator("ControlLeft+MetaLeft+KeyV").as_deref(),
+            Some("Control+Super+V")
+        );
+    }
+
+    #[test]
+    fn rejects_shortcuts_global_backend_cannot_represent() {
+        assert_eq!(linux_ptt_accelerator("ControlRight"), None);
+        assert_eq!(linux_ptt_accelerator("ControlLeft+AltLeft"), None);
     }
 }
 

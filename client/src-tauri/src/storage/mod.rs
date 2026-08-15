@@ -4,14 +4,24 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-/// Default settings values (mirrors electron-app/electron/store.ts)
+#[cfg(target_os = "linux")]
+const DEFAULT_PTT_SETTING_JSON: &str = r#""ControlLeft+AltLeft+Space""#;
+#[cfg(not(target_os = "linux"))]
+const DEFAULT_PTT_SETTING_JSON: &str = r#""ControlRight""#;
+
+#[cfg(target_os = "linux")]
+const DEFAULT_HANDS_FREE_SETTING_JSON: &str = r#""Control+Alt+L""#;
+#[cfg(not(target_os = "linux"))]
+const DEFAULT_HANDS_FREE_SETTING_JSON: &str = r#""AltRight""#;
+
+/// Default settings values (mirrors client/src/services/defaults.ts)
 const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     // 按住说话的默认键。不能是 Shift：长按右 Shift 会触发 Windows 筛选键，
     // 导致松开后录音停不下来。与 src/services/defaults.ts、keyboard/mod.rs 的
     // DEFAULT_PTT_SETTING 保持一致。
-    ("shortcutPTT", r#""ControlRight""#),
+    ("shortcutPTT", DEFAULT_PTT_SETTING_JSON),
     ("shortcutPTTCombo", r#""Alt+Q""#),
-    ("shortcutHandsFree", r#""AltRight""#),
+    ("shortcutHandsFree", DEFAULT_HANDS_FREE_SETTING_JSON),
     ("autoLaunch", "true"),
     ("selectedMic", r#""""#),
     ("hotwords", "[]"),

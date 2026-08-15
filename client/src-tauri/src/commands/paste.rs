@@ -29,6 +29,13 @@ pub fn paste_text(
     window_state: State<WindowState>,
 ) -> Result<PasteResult, String> {
     let restore_clipboard = restore_clipboard.unwrap_or(false);
+    #[cfg(target_os = "linux")]
+    let result = {
+        let _ = (&hwnd, &focus_hwnd);
+        inject::inject_text_linux(&app, &text, restore_clipboard)
+    };
+
+    #[cfg(not(target_os = "linux"))]
     let result = match hwnd.as_deref() {
         Some(h) if !h.is_empty() && h != "0" => {
             let target_val = h.parse::<isize>().unwrap_or(0);
@@ -50,7 +57,7 @@ pub fn paste_text(
     // If injection failed because target is not editable, trigger overlay fallback
     if !result.ok {
         if result.reason.as_deref() == Some("not_editable") {
-            let _ = inject_to_clipboard(&text);
+            let _ = inject_to_clipboard(&app, &text);
 
             let fallback_data = serde_json::json!({
                 "state": "fallback",
@@ -155,13 +162,14 @@ pub fn get_active_app_context(detector: State<ContextDetector>) -> Result<Option
 }
 
 #[tauri::command]
-pub fn copy_text(text: String) -> Result<(), String> {
-    inject_to_clipboard(&text).map_err(|e| e.to_string())
+pub fn copy_text(text: String, app: AppHandle) -> Result<(), String> {
+    inject_to_clipboard(&app, &text).map_err(|e| e.to_string())
 }
 
-fn inject_to_clipboard(text: &str) -> Result<(), String> {
+fn inject_to_clipboard(app: &AppHandle, text: &str) -> Result<(), String> {
     #[cfg(windows)]
     {
+        let _ = app;
         unsafe {
             if crate::inject::set_clipboard_with_retry_pub(text, 5, 30) {
                 Ok(())
@@ -170,9 +178,16 @@ fn inject_to_clipboard(text: &str) -> Result<(), String> {
             }
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        let _ = text;
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        app.clipboard()
+            .write_text(text.to_string())
+            .map_err(|error| error.to_string())
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        let _ = (app, text);
         Err("not implemented on this platform".to_string())
     }
 }

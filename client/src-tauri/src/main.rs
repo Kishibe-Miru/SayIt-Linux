@@ -34,6 +34,11 @@ const WEBVIEW2_BROWSER_ARGS: &str =
      --disable-backgrounding-occluded-windows --disable-renderer-backgrounding \
      --disable-background-timer-throttling";
 
+#[cfg(target_os = "windows")]
+const APP_ICON_BYTES: &[u8] = include_bytes!("../icons/icon.ico");
+#[cfg(not(target_os = "windows"))]
+const APP_ICON_BYTES: &[u8] = include_bytes!("../icons/icon.png");
+
 fn browser_args_fingerprint(value: &str) -> String {
     // Stable FNV-1a fingerprint: enough to compare field reports without logging a
     // potentially sensitive inherited proxy argument verbatim.
@@ -250,9 +255,15 @@ fn main() {
     // Read PTT setting before moving storage into managed state
     let ptt_setting_val = storage.get("shortcutPTT", None);
     // 兜底键与 storage 种子、前端 defaults.ts 保持一致；绝不能是 Shift（会触发筛选键）
-    let ptt_str = ptt_setting_val.as_str().unwrap_or("ControlRight").to_string();
+    let ptt_str = ptt_setting_val
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| keyboard::default_ptt_setting().to_owned());
     let hf_setting_val = storage.get("shortcutHandsFree", None);
-    let hf_str = hf_setting_val.as_str().unwrap_or("AltRight").to_string();
+    let hf_str = hf_setting_val
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| keyboard::default_hands_free_setting().to_owned());
     log::info!("PTT setting from DB: raw={:?} parsed={:?}", ptt_setting_val, ptt_str);
     log::info!("HF setting from DB: raw={:?} parsed={:?}", hf_setting_val, hf_str);
 
@@ -348,13 +359,15 @@ fn main() {
                 return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, message).into());
             }
 
-            let hook: tauri::State<KeyboardHookManager> = app.state();
-            hook.start(app.handle(), &ptt_str, &hf_str);
+            #[cfg(target_os = "windows")]
+            {
+                let hook: tauri::State<KeyboardHookManager> = app.state();
+                hook.start(app.handle(), &ptt_str, &hf_str);
 
-            // 每 60s 记录一次键盘钩子健康快照（[ptt-watchdog] 日志行），
-            // 用于排查"过一段时间后 Alt 说话没反应"这类间歇性问题：
-            // 复现后翻 sayit.log 找最后一次正常快照和第一次异常快照之间的时间窗。
-            keyboard::spawn_health_watchdog();
+                // 每 60s 记录一次键盘钩子健康快照（[ptt-watchdog] 日志行），
+                // 用于排查"过一段时间后 Alt 说话没反应"这类间歇性问题。
+                keyboard::spawn_health_watchdog();
+            }
 
             // 设置窗口图标（用 ICO 文件，包含多尺寸帧，Windows 自动选最合适的）
             // 并根据启动方式决定是否显示主窗口：
@@ -365,8 +378,7 @@ fn main() {
             // 用于自动打开并跳转到关于页，让用户能确认更新已生效。
             let launched_open_about = std::env::args().any(|arg| arg == "--open-about");
             if let Some(main_window) = app.get_webview_window("main") {
-                let ico_bytes = include_bytes!("../icons/icon.ico");
-                if let Ok(icon) = tauri::image::Image::from_bytes(ico_bytes) {
+                if let Ok(icon) = tauri::image::Image::from_bytes(APP_ICON_BYTES) {
                     let _ = main_window.set_icon(icon);
                 }
 
@@ -455,8 +467,7 @@ fn main() {
                     .item(&quit_item)
                     .build()?;
 
-                let ico_bytes = include_bytes!("../icons/icon.ico");
-                let icon = tauri::image::Image::from_bytes(ico_bytes)
+                let icon = tauri::image::Image::from_bytes(APP_ICON_BYTES)
                     .expect("failed to load tray icon");
 
                 let _tray = TrayIconBuilder::new()

@@ -28,6 +28,8 @@ client/scripts/*
 client/dist/
 # build.rs 从 transcribe-cpp 的构建产物拷进来的 DLL，纯生成物
 client/src-tauri/transcribe-libs/
+# Tauri 在 Linux 构建时生成，内容与已跟踪的 desktop-schema.json 相同
+client/src-tauri/gen/schemas/linux-schema.json
 
 # ── Kiro IDE ──
 .kiro/

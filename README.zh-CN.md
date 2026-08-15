@@ -14,6 +14,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/crosswk/SayIt/releases)
+[![Linux Port](https://img.shields.io/badge/Linux-source%20build-FCC624?logo=linux&logoColor=black)](docs/Linux.md)
 
 **[下载客户端](https://github.com/crosswk/SayIt/releases/latest)** · **[网页版体验](https://sayitapp.site)** · **[配置文档](docs/)**
 
@@ -210,6 +211,8 @@ SayIt/
 | 开发　　　　　 | 整个项目使用 Claude Opus 开发　　　　　　　　　　　　|
 
 ## 开发
+
+Linux 源码版的依赖、X11/Wayland 差异与打包方式见 [Linux 说明](docs/Linux.md)。
 
 ### 客户端
 

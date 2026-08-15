@@ -10,13 +10,13 @@
 
 use serde::Serialize;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(windows)]
 use std::time::Instant;
 
 /// 每次剪贴板粘贴递增。旧恢复线程看到新一代粘贴后会放弃，避免覆盖新内容。
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 static PASTE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(windows)]
@@ -181,6 +181,154 @@ pub fn inject_text_to_hwnd(_text: &str, _target: isize, _focus: isize, _restore_
 #[cfg(not(windows))]
 pub fn inject_text(_text: &str, _restore_clipboard: bool) -> InjectResult {
     InjectResult { ok: false, strategy: None, reason: Some("not_windows".to_string()), detail: None, uncertain: false }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LinuxPasteTool {
+    Xdotool,
+    Wtype,
+    Ydotool,
+}
+
+#[cfg(target_os = "linux")]
+impl LinuxPasteTool {
+    fn executable(self) -> &'static str {
+        match self {
+            Self::Xdotool => "xdotool",
+            Self::Wtype => "wtype",
+            Self::Ydotool => "ydotool",
+        }
+    }
+
+    fn run(self) -> std::io::Result<std::process::ExitStatus> {
+        let mut command = std::process::Command::new(self.executable());
+        match self {
+            Self::Xdotool => {
+                command.args(["key", "--clearmodifiers", "ctrl+v"]);
+            }
+            Self::Wtype => {
+                command.args(["-M", "ctrl", "-k", "v", "-m", "ctrl"]);
+            }
+            Self::Ydotool => {
+                // Linux input-event codes: KEY_LEFTCTRL=29, KEY_V=47.
+                command.args(["key", "29:1", "47:1", "47:0", "29:0"]);
+            }
+        }
+        command.status()
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn executable_in_path(program: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|dir| dir.join(program).is_file())
+}
+
+#[cfg(target_os = "linux")]
+fn linux_paste_candidates(session_type: Option<&str>) -> Vec<LinuxPasteTool> {
+    let is_wayland = session_type
+        .is_some_and(|value| value.eq_ignore_ascii_case("wayland"))
+        || std::env::var_os("WAYLAND_DISPLAY").is_some();
+    if is_wayland {
+        vec![LinuxPasteTool::Wtype, LinuxPasteTool::Ydotool, LinuxPasteTool::Xdotool]
+    } else {
+        vec![LinuxPasteTool::Xdotool, LinuxPasteTool::Ydotool, LinuxPasteTool::Wtype]
+    }
+}
+
+/// Linux text insertion uses the desktop clipboard plus a compositor-appropriate
+/// synthetic Ctrl+V. X11 is covered by xdotool; Wayland compositors can use wtype,
+/// with ydotool as the compositor-independent uinput fallback.
+#[cfg(target_os = "linux")]
+pub fn inject_text_linux(
+    app: &tauri::AppHandle,
+    text: &str,
+    restore_clipboard: bool,
+) -> InjectResult {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+
+    let clipboard = app.clipboard();
+    let previous_text = if restore_clipboard {
+        clipboard.read_text().ok()
+    } else {
+        None
+    };
+    if let Err(error) = clipboard.write_text(text.to_string()) {
+        return InjectResult {
+            ok: false,
+            strategy: Some("linux_clipboard".to_string()),
+            reason: Some("clipboard_write_failed".to_string()),
+            detail: Some(error.to_string()),
+            uncertain: false,
+        };
+    }
+
+    let paste_id = PASTE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let session_type = std::env::var("XDG_SESSION_TYPE").ok();
+    let mut attempts = Vec::new();
+    for tool in linux_paste_candidates(session_type.as_deref()) {
+        if !executable_in_path(tool.executable()) {
+            attempts.push(format!("{}:not_found", tool.executable()));
+            continue;
+        }
+        match tool.run() {
+            Ok(status) if status.success() => {
+                crate::commands::system::write_log_line(&format!(
+                    "[RUST] [inject] Linux paste succeeded tool={} session={} pasteId={}",
+                    tool.executable(),
+                    session_type.as_deref().unwrap_or("unknown"),
+                    paste_id,
+                ));
+
+                if restore_clipboard {
+                    if let Some(previous_text) = previous_text.clone() {
+                        let app = app.clone();
+                        let injected_text = text.to_string();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                            if PASTE_GENERATION.load(Ordering::Acquire) != paste_id {
+                                return;
+                            }
+                            let clipboard = app.clipboard();
+                            if clipboard.read_text().ok().as_deref() == Some(injected_text.as_str()) {
+                                let _ = clipboard.write_text(previous_text);
+                            }
+                        });
+                    }
+                }
+
+                return InjectResult {
+                    ok: true,
+                    strategy: Some(format!("clipboard_{}", tool.executable())),
+                    reason: None,
+                    detail: Some(format!(
+                        "session={} pasteId={}",
+                        session_type.as_deref().unwrap_or("unknown"),
+                        paste_id
+                    )),
+                    // Synthetic input reports only that the command succeeded, not that the
+                    // focused widget accepted the paste.
+                    uncertain: true,
+                };
+            }
+            Ok(status) => attempts.push(format!("{}:exit={}", tool.executable(), status)),
+            Err(error) => attempts.push(format!("{}:{}", tool.executable(), error)),
+        }
+    }
+
+    InjectResult {
+        ok: false,
+        strategy: Some("clipboard_only".to_string()),
+        reason: Some("linux_paste_tool_unavailable".to_string()),
+        detail: Some(format!(
+            "Text was copied; install xdotool (X11) or wtype/ydotool (Wayland). attempts=[{}]",
+            attempts.join(", ")
+        )),
+        uncertain: false,
+    }
 }
 
 fn is_likely_editable(ctx: &context::AppContext) -> bool {

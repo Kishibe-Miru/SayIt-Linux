@@ -3,10 +3,16 @@
 //! Also runs a WinEvent hook to push context updates when the foreground window changes.
 
 use serde::Serialize;
+#[cfg(windows)]
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use std::sync::Arc;
+use std::sync::Mutex;
+#[cfg(windows)]
 use std::thread;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::AppHandle;
+#[cfg(windows)]
+use tauri::{Emitter, Manager};
 
 #[cfg(windows)]
 use windows::Win32::Foundation::HWND;
@@ -67,6 +73,7 @@ pub struct MonitorBounds {
 
 pub struct ContextDetector {
     cached_context: Mutex<Option<AppContext>>,
+    #[cfg(windows)]
     winevent_running: AtomicBool,
 }
 
@@ -74,6 +81,7 @@ impl ContextDetector {
     pub fn new() -> Self {
         Self {
             cached_context: Mutex::new(None),
+            #[cfg(windows)]
             winevent_running: AtomicBool::new(false),
         }
     }
@@ -410,7 +418,70 @@ fn uia_control_type_name(id: i32) -> String {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn capture_context(reason: &str) -> AppContext {
+    let mut ctx = AppContext {
+        reason: reason.to_string(),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        // Linux desktop accessibility APIs differ across X11/Wayland and toolkits.
+        // The paste backend is harmless when a widget rejects Ctrl+V, so use an
+        // optimistic editability verdict and let insertion report the real outcome.
+        control_type: "Document".to_string(),
+        is_keyboard_focusable: true,
+        is_enabled: true,
+        ..Default::default()
+    };
+
+    // X11 exposes the active window through xdotool. Native Wayland intentionally
+    // does not provide a compositor-independent equivalent; in that case the generic
+    // optimistic context above still enables voice insertion.
+    if let Some(window_id) = linux_command_stdout("xdotool", &["getactivewindow"]) {
+        ctx.hwnd = window_id.clone();
+        ctx.focus_hwnd = window_id.clone();
+        ctx.window_title = linux_command_stdout("xdotool", &["getwindowname", &window_id])
+            .unwrap_or_default();
+        ctx.window_class = linux_command_stdout("xdotool", &["getwindowclassname", &window_id])
+            .unwrap_or_default();
+        ctx.focus_class = ctx.window_class.clone();
+        ctx.pid = linux_command_stdout("xdotool", &["getwindowpid", &window_id])
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(0);
+        ctx.tid = ctx.pid;
+        if ctx.pid != 0 {
+            ctx.process_name = std::fs::read_to_string(format!("/proc/{}/comm", ctx.pid))
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            ctx.exe_path = std::fs::read_link(format!("/proc/{}/exe", ctx.pid))
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_default();
+        }
+    }
+
+    if ctx.hwnd.is_empty() {
+        ctx.hwnd = "linux-active-window".to_string();
+        ctx.focus_hwnd = ctx.hwnd.clone();
+        ctx.process_name = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_else(|_| "linux-desktop".to_string());
+        ctx.window_class = std::env::var("XDG_SESSION_TYPE")
+            .unwrap_or_else(|_| "unknown".to_string());
+        ctx.focus_class = ctx.window_class.clone();
+    }
+
+    ctx
+}
+
+#[cfg(target_os = "linux")]
+fn linux_command_stdout(program: &str, args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(program).args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!value.is_empty()).then_some(value)
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn capture_context(reason: &str) -> AppContext {
     AppContext {
         reason: reason.to_string(),
