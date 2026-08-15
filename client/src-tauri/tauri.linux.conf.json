@@ -23,6 +23,7 @@
           "python3-gi",
           "gir1.2-ibus-1.0",
           "ibus",
+          "gstreamer1.0-plugins-bad",
           "libfcitx5core7 (>= 5.1.13)"
         ],
         "recommends": [

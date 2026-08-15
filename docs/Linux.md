@@ -73,8 +73,11 @@ sudo apt install -y \
   build-essential curl file libssl-dev libgtk-3-dev \
   libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
   libasound2-dev cmake patchelf ninja-build extra-cmake-modules \
-  libfcitx5core-dev libfcitx5utils-dev
+  libfcitx5core-dev libfcitx5utils-dev gstreamer1.0-plugins-bad
 ```
+
+`gstreamer1.0-plugins-bad` 为 WebKitGTK 补充录音所需的媒体组件；缺少它时，
+应用可能出现 `fakevideosink` 或 WebVTT 编码器未找到的提示，并导致麦克风启动失败。
 
 安装 Node.js 24 和 rustup 后构建：
 
