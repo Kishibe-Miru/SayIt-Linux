@@ -55,6 +55,7 @@ transcribe-cpp = { version = "0.1.3", default-features = false, features = [
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13", default-features = false, features = ["global_shortcuts", "tokio"] }
+webkit2gtk = "2.0.2"
 
 [target.'cfg(windows)'.dependencies]
 transcribe-cpp = { version = "0.1.3", default-features = false, features = [

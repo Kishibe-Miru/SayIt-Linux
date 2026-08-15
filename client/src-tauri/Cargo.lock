@@ -4082,6 +4082,7 @@ dependencies = [
  "tokio-tungstenite",
  "transcribe-cpp",
  "uuid",
+ "webkit2gtk",
  "webview2-com",
  "whoami",
  "windows 0.58.0",

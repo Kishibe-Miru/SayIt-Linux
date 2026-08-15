@@ -432,6 +432,42 @@ fn main() {
                     });
                 }
 
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = main_window.with_webview(|webview| {
+                        use webkit2gtk::glib::prelude::*;
+                        use webkit2gtk::{
+                            DeviceInfoPermissionRequest, PermissionRequestExt,
+                            UserMediaPermissionRequest, UserMediaPermissionRequestExt, WebViewExt,
+                        };
+
+                        webview.inner().connect_permission_request(|_, request| {
+                            if let Some(media_request) =
+                                request.downcast_ref::<UserMediaPermissionRequest>()
+                            {
+                                if media_request.is_for_audio_device()
+                                    && !media_request.is_for_video_device()
+                                {
+                                    request.allow();
+                                    log::info!("WebKitGTK microphone permission allowed");
+                                    return true;
+                                }
+
+                                return false;
+                            }
+
+                            if request.is::<DeviceInfoPermissionRequest>() {
+                                request.allow();
+                                log::info!("WebKitGTK device-info permission allowed");
+                                return true;
+                            }
+
+                            false
+                        });
+                        log::info!("WebKitGTK PermissionRequest handler attached");
+                    });
+                }
+
                 if !launched_minimized {
                     // show() 只清 SW_HIDE，不解除最小化（iconic）状态：窗口若以
                     // 最小化状态诞生，只 show 会停在 -32000 的停车位上，看起来"没启动"。
